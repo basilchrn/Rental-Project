@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Rental Hub | Space & Day Slot Manager</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* Prevent iOS auto-zoom on inputs */
+    @media screen and (max-width: 768px) {
+      input, select, textarea { font-size: 16px !important; }
+    }
+    .safe-top { padding-top: max(1rem, env(safe-area-inset-top)); }
+    .safe-bottom { padding-bottom: max(1.25rem, env(safe-area-inset-bottom)); }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 antialiased min-h-screen pb-24 md:pb-8">
+
+  <!-- CONFIGURATION -->
+  <script>
+    // PASTE YOUR DEPLOYED GOOGLE APPS SCRIPT WEB APP URL HERE:
+    const API_URL = "YOUR_APPS_SCRIPT_WEB_APP_URL";
+  </script>
+
+  <!-- TOP HEADER -->
+  <header class="bg-indigo-900 text-white safe-top px-4 py-4 shadow-md sticky top-0 z-30">
+    <div class="max-w-6xl mx-auto flex items-center justify-between">
+      <div>
+        <h1 class="text-xl font-bold tracking-tight">Premises Rental Hub</h1>
+        <p class="text-xs text-indigo-200">Day & Multi-Day Slot Reservations</p>
+      </div>
+      <div class="flex gap-2">
+        <button onclick="refreshData()" class="bg-indigo-800 hover:bg-indigo-700 text-xs px-3 py-2 rounded-lg border border-indigo-600 transition flex items-center gap-1">
+          <span id="syncIcon">🔄</span> Sync
+        </button>
+        <button onclick="openBookingModal()" class="bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold text-xs px-3 py-2 rounded-lg shadow transition">
+          + New Booking
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- METRIC KPI CARDS -->
+  <main class="max-w-6xl mx-auto p-4 space-y-6">
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+        <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Spaces</span>
+        <p id="statTotal" class="text-2xl font-bold text-slate-800">4</p>
+      </div>
+      <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+        <span class="text-xs font-semibold text-emerald-600 uppercase tracking-wider">Available</span>
+        <p id="statAvailable" class="text-2xl font-bold text-emerald-600">--</p>
+      </div>
+      <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+        <span class="text-xs font-semibold text-rose-500 uppercase tracking-wider">Occupied</span>
+        <p id="statBooked" class="text-2xl font-bold text-rose-600">--</p>
+      </div>
+      <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+        <span class="text-xs font-semibold text-amber-600 uppercase tracking-wider">Pending Due</span>
+        <p id="statPending" class="text-2xl font-bold text-amber-600">₹0</p>
+      </div>
+    </div>
+
+    <!-- SPACES GRID -->
+    <div>
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-base font-bold text-slate-800">Premises Units</h2>
+        <span id="loadingNotice" class="text-xs text-indigo-600 hidden animate-pulse font-medium">Syncing with Google Sheets...</span>
+      </div>
+      <div id="spacesGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <!-- Rendered via JS -->
+      </div>
+    </div>
+
+    <!-- RECENT BOOKINGS / ACTIVE LEDGER -->
+    <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+      <h2 class="text-base font-bold text-slate-800 mb-3">Active Bookings & Payments</h2>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs text-slate-600">
+          <thead class="bg-slate-50 text-slate-400 uppercase font-semibold border-b">
+            <tr>
+              <th class="py-2 px-3">Unit</th>
+              <th class="py-2 px-3">Tenant</th>
+              <th class="py-2 px-3">Dates</th>
+              <th class="py-2 px-3">Net Rent</th>
+              <th class="py-2 px-3">Advance</th>
+              <th class="py-2 px-3">Balance</th>
+              <th class="py-2 px-3 text-right">Action</th>
+            </tr>
+          </thead>
+          <tbody id="bookingsTableBody" class="divide-y divide-slate-100 font-medium">
+            <!-- Rendered via JS -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <!-- MODAL: NEW BOOKING & TENANT REGISTRATION -->
+  <div id="bookingModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-end md:items-center justify-center p-0 md:p-4">
+    <div class="bg-white w-full max-w-xl max-h-[92vh] rounded-t-2xl md:rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+      
+      <div class="p-4 bg-indigo-900 text-white flex justify-between items-center">
+        <div>
+          <h3 class="font-bold text-base">New Slot Reservation</h3>
+          <p class="text-xs text-indigo-200">Register tenant & calculate rates</p>
+        </div>
+        <button onclick="closeBookingModal()" class="text-indigo-200 hover:text-white text-2xl font-bold leading-none">&times;</button>
+      </div>
+
+      <form id="bookingForm" onsubmit="submitNewBooking(event)" class="overflow-y-auto p-4 space-y-4 text-xs">
+        
+        <!-- Space & Date Selection -->
+        <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-3">
+          <span class="font-bold text-slate-700 block">1. Space & Slot Details</span>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-slate-500 mb-1">Select Space</label>
+              <select id="modalSpaceSelect" onchange="calculatePricing()" class="w-full border rounded-lg p-2 bg-white" required></select>
+            </div>
+            <div>
+              <label class="block text-slate-500 mb-1">Rental Type</label>
+              <select id="modalSlotType" onchange="calculatePricing()" class="w-full border rounded-lg p-2 bg-white">
+                <option value="SingleDay">Single Full Day</option>
+                <option value="CombinedDays">Combined Multi-Day</option>
+                <option value="HalfDay">Half Day / Slot</option>
+              </select>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-slate-500 mb-1">Start Date</label>
+              <input type="date" id="modalStartDate" onchange="calculatePricing()" class="w-full border rounded-lg p-2 bg-white" required>
+            </div>
+            <div>
+              <label class="block text-slate-500 mb-1">End Date</label>
+              <input type="date" id="modalEndDate" onchange="calculatePricing()" class="w-full border rounded-lg p-2 bg-white" required>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tenant Demographics & ID Proof -->
+        <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-3">
+          <span class="font-bold text-slate-700 block">2. Tenant Information (Mandatory)</span>
+          <div>
+            <label class="block text-slate-500 mb-1">Full Name</label>
+            <input type="text" id="tName" placeholder="e.g., Rajesh Kumar" class="w-full border rounded-lg p-2 bg-white" required>
+          </div>
+          <div class="grid grid-cols-3 gap-2">
+            <div>
+              <label class="block text-slate-500 mb-1">Age</label>
+              <input type="number" id="tAge" min="18" placeholder="28" class="w-full border rounded-lg p-2 bg-white" required>
+            </div>
+            <div>
+              <label class="block text-slate-500 mb-1">Gender</label>
+              <select id="tGender" class="w-full border rounded-lg p-2 bg-white">
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-slate-500 mb-1">Phone Number</label>
+              <input type="tel" id="tPhone" placeholder="10 digits" class="w-full border rounded-lg p-2 bg-white" required>
+            </div>
+          </div>
+
+          <!-- Mandatory ID Proof File/Camera -->
+          <div class="border-2 border-dashed border-slate-300 rounded-xl p-3 bg-white text-center">
+            <label class="block font-semibold text-slate-700 mb-1">Mandatory ID Proof Photo</label>
+            <p class="text-[11px] text-slate-400 mb-2">Snap a camera photo or upload Aadhaar/Govt ID</p>
+            
+            <div class="flex flex-wrap gap-2 justify-center items-center">
+              <input type="file" id="idProofInput" accept="image/*" capture="environment" onchange="handleIdFile(event)" class="text-xs text-slate-500 file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:bg-indigo-50 file:text-indigo-700">
+              <button type="button" onclick="generateMockId()" class="text-xs bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded text-slate-600 border">
+                Use Test ID Card
+              </button>
+            </div>
+            
+            <div id="idPreviewBox" class="mt-2 hidden">
+              <img id="idImageTag" src="" class="h-24 mx-auto rounded border shadow-sm object-cover">
+              <span class="text-[10px] text-emerald-600 font-semibold block mt-1">✓ ID Proof Loaded</span>
+            </div>
+            <input type="hidden" id="idProofBase64" required>
+          </div>
+        </div>
+
+        <!-- F&F Discount & Payment Engine -->
+        <div class="bg-indigo-50/60 p-3 rounded-xl border border-indigo-100 space-y-3">
+          <span class="font-bold text-indigo-900 block">3. Rates & Discount Engine</span>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-slate-500 mb-1">Pricing / F&F Tier</label>
+              <select id="modalDiscount" onchange="calculatePricing()" class="w-full border rounded-lg p-2 bg-white font-medium">
+                <option value="0">Standard (0% Off)</option>
+                <option value="0.20">Friends & Family (20% Off)</option>
+                <option value="0.35">Special F&F (35% Off)</option>
+                <option value="0.50">Close Family (50% Off)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-slate-500 mb-1">Advance Collected (₹)</label>
+              <input type="number" id="modalAdvance" oninput="calculatePricing()" placeholder="0" class="w-full border rounded-lg p-2 bg-white font-semibold text-emerald-700" required>
+            </div>
+          </div>
+
+          <!-- Dynamic Ledger Preview -->
+          <div class="text-[11px] bg-white p-2.5 rounded-lg border border-indigo-100 space-y-1">
+            <div class="flex justify-between"><span>Base Rent (<span id="calcDays">1</span> day(s)):</span><span id="calcBase" class="font-semibold">₹0</span></div>
+            <div class="flex justify-between text-rose-600"><span>F&F Discount:</span><span id="calcDisc">-₹0</span></div>
+            <div class="flex justify-between"><span>Caution Deposit:</span><span id="calcDeposit" class="font-semibold">₹0</span></div>
+            <div class="flex justify-between border-t pt-1 font-bold text-slate-800"><span>Total Payable:</span><span id="calcTotal">₹0</span></div>
+            <div class="flex justify-between font-bold text-amber-600"><span>Balance Pending:</span><span id="calcBalance">₹0</span></div>
+          </div>
+        </div>
+
+        <button type="submit" id="saveBookingBtn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl shadow transition">
+          Confirm & Save Booking
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- DRAWER: TENANT INFO SHEET & BALANCE SETTLEMENT -->
+  <div id="tenantDrawer" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex justify-end">
+    <div class="bg-white w-full max-w-md h-full shadow-2xl flex flex-col p-5 overflow-y-auto safe-top safe-bottom">
+      <div class="flex justify-between items-center pb-3 border-b">
+        <h3 class="font-bold text-base text-slate-800">Tenant Info Sheet</h3>
+        <button onclick="closeTenantDrawer()" class="text-slate-400 hover:text-slate-700 text-xl font-bold">&times;</button>
+      </div>
+
+      <div id="drawerContent" class="py-4 space-y-4 text-xs">
+        <!-- Rendered dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <!-- APPLICATION LOGIC -->
+  <script>
+    // In-memory state
+    let DB = {
+      spaces: [
+        { space_id: "SP-01", name: "North Hall (Capacity: 100)", full_day_rate: 8000, half_day_rate: 4500, default_deposit: 2000, allowed_options: "FullDay, CombinedDays", status: "Available" },
+        { space_id: "SP-02", name: "Studio A (A/C, Soundproof)", full_day_rate: 5000, half_day_rate: 3000, default_deposit: 1500, allowed_options: "FullDay, HalfDay", status: "Available" },
+        { space_id: "SP-03", name: "Rooftop Open Terrace", full_day_rate: 6000, half_day_rate: 3500, default_deposit: 2000, allowed_options: "FullDay, CombinedDays", status: "Available" },
+        { space_id: "SP-04", name: "Conference Suite B", full_day_rate: 3500, half_day_rate: 2000, default_deposit: 1000, allowed_options: "FullDay, HalfDay", status: "Available" }
+      ],
+      bookings: [],
+      tenants: []
+    };
+
+    // Initialize application
+    window.addEventListener("DOMContentLoaded", () => {
+      // Set default dates in form to today
+      const today = new Date().toISOString().split("T")[0];
+      document.getElementById("modalStartDate").value = today;
+      document.getElementById("modalEndDate").value = today;
+      
+      populateSpaceOptions();
+      renderDashboard();
+      
+      if (API_URL && API_URL !== "YOUR_APPS_SCRIPT_WEB_APP_URL") {
+        refreshData();
+      }
+    });
+
+    async function refreshData() {
+      if (!API_URL || API_URL === "YOUR_APPS_SCRIPT_WEB_APP_URL") {
+        alert("Please set your deployed Google Apps Script URL in index.html to sync live data.");
+        return;
+      }
+      document.getElementById("loadingNotice").classList.remove("hidden");
+      try {
+        const res = await fetch(API_URL);
+        const json = await res.json();
+        if (json.status === "success" && json.data) {
+          if (json.data.spaces && json.data.spaces.length) DB.spaces = json.data.spaces;
+          DB.bookings = json.data.bookings || [];
+          DB.tenants = json.data.tenants || [];
+          renderDashboard();
+        }
+      } catch (err) {
+        console.error("Fetch error:", err);
+      } finally {
+        document.getElementById("loadingNotice").classList.add("hidden");
+      }
+    }
+
+    function renderDashboard() {
+      // 1. Stats calculation
+      const total = DB.spaces.length;
+      const booked = DB.spaces.filter(s => s.status === "Booked").length;
+      const available = total - booked;
+      
+      let pendingBalance = 0;
+      DB.bookings.forEach(b => {
+        if (b.balance_status === "Pending") {
+          pendingBalance += (Number(b.net_rent) + Number(b.caution_deposit) - Number(b.advance_paid) - Number(b.balance_paid || 0));
+        }
+      });
+
+      document.getElementById("statTotal").innerText = total;
+      document.getElementById("statBooked").innerText = booked;
+      document.getElementById("statAvailable").innerText = available;
+      document.getElementById("statPending").innerText = `₹${pendingBalance.toLocaleString()}`;
+
+      // 2. Render Spaces Grid
+      const grid = document.getElementById("spacesGrid");
+      grid.innerHTML = DB.spaces.map(s => {
+        const isBooked = s.status === "Booked";
+        const currentBooking = DB.bookings.find(b => b.space_id === s.space_id && b.balance_status !== "Completed");
+        const tenant = currentBooking ? DB.tenants.find(t => t.booking_id === currentBooking.booking_id) : null;
+
+        return `
+          <div class="bg-white rounded-2xl border ${isBooked ? 'border-rose-200' : 'border-slate-200'} p-4 shadow-sm flex flex-col justify-between">
+            <div>
+              <div class="flex justify-between items-start mb-2">
+                <span class="text-xs font-bold text-slate-400">${s.space_id}</span>
+                <span class="px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                  s.status === 'Available' ? 'bg-emerald-100 text-emerald-800' :
+                  s.status === 'Booked' ? 'bg-rose-100 text-rose-800' : 'bg-slate-100 text-slate-800'
+                }">${s.status}</span>
+              </div>
+              <h3 class="font-bold text-slate-800 text-sm mb-1">${s.name}</h3>
+              <p class="text-slate-500 text-xs mb-3">Rate: <b>₹${s.full_day_rate}</b>/day | Deposit: ₹${s.default_deposit}</p>
+              
+              ${isBooked && tenant ? `
+                <div class="bg-rose-50/70 p-2.5 rounded-xl border border-rose-100 text-xs text-rose-900 mb-3">
+                  <div class="font-bold">${tenant.full_name} (${tenant.phone_number})</div>
+                  <div class="text-[11px] text-rose-700">Dates: ${currentBooking.start_date} to ${currentBooking.end_date}</div>
+                </div>
+              ` : `
+                <div class="text-[11px] text-slate-400 mb-3 italic">Options: ${s.allowed_options}</div>
+              `}
+            </div>
+
+            <div class="pt-2 border-t flex gap-2">
+              ${isBooked && currentBooking ? `
+                <button onclick="openTenantDrawer('${currentBooking.booking_id}')" class="flex-1 bg-slate-900 hover:bg-slate-800 text-white font-semibold py-2 rounded-lg text-xs">
+                  Inspect Tenant & Settle
+                </button>
+              ` : `
+                <button onclick="quickBookSpace('${s.space_id}')" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 rounded-lg text-xs">
+                  Book Slot
+                </button>
+              `}
+            </div>
+          </div>
+        `;
+      }).join("");
+
+      // 3. Render Bookings Table
+      const tBody = document.getElementById("bookingsTableBody");
+      if (DB.bookings.length === 0) {
+        tBody.innerHTML = `<tr><td colspan="7" class="py-4 text-center text-slate-400">No active bookings found.</td></tr>`;
+      } else {
+        tBody.innerHTML = DB.bookings.map(b => {
+          const space = DB.spaces.find(s => s.space_id === b.space_id);
+          const tenant = DB.tenants.find(t => t.booking_id === b.booking_id);
+          const balance = (Number(b.net_rent) + Number(b.caution_deposit) - Number(b.advance_paid) - Number(b.balance_paid || 0));
+
+          return `
+            <tr class="hover:bg-slate-50">
+              <td class="py-2.5 px-3 font-semibold text-slate-800">${space ? space.name : b.space_id}</td>
+              <td class="py-2.5 px-3">${tenant ? tenant.full_name : 'N/A'}</td>
+              <td class="py-2.5 px-3 text-[11px]">${b.start_date} → ${b.end_date}</td>
+              <td class="py-2.5 px-3 font-bold">₹${b.net_rent}</td>
+              <td class="py-2.5 px-3 text-emerald-600">₹${b.advance_paid}</td>
+              <td class="py-2.5 px-3 ${balance > 0 ? 'text-amber-600 font-bold' : 'text-slate-400'}">₹${balance}</td>
+              <td class="py-2.5 px-3 text-right">
+                <button onclick="openTenantDrawer('${b.booking_id}')" class="text-indigo-600 hover:underline">View</button>
+              </td>
+            </tr>
+          `;
+        }).join("");
+      }
+    }
+
+    function populateSpaceOptions() {
+      const select = document.getElementById("modalSpaceSelect");
+      select.innerHTML = DB.spaces.map(s => `<option value="${s.space_id}">${s.name} (₹${s.full_day_rate}/day)</option>`).join("");
+      calculatePricing();
+    }
+
+    function calculatePricing() {
+      const spaceId = document.getElementById("modalSpaceSelect").value;
+      const space = DB.spaces.find(s => s.space_id === spaceId);
+      if (!space) return;
+
+      const slotType = document.getElementById("modalSlotType").value;
+      const start = new Date(document.getElementById("modalStartDate").value);
+      const end = new Date(document.getElementById("modalEndDate").value);
+      
+      let days = Math.max(1, Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1);
+      if (slotType === "HalfDay") days = 0.5;
+
+      const baseRate = days === 0.5 ? space.half_day_rate : space.full_day_rate * days;
+      const discountPct = parseFloat(document.getElementById("modalDiscount").value) || 0;
+      const discountAmt = Math.round(baseRate * discountPct);
+      const netRent = baseRate - discountAmt;
+      const deposit = space.default_deposit;
+      const totalPayable = netRent + deposit;
+
+      const advanceInput = document.getElementById("modalAdvance");
+      if (!advanceInput.value) advanceInput.value = Math.round(totalPayable * 0.3); // suggest 30% advance
+      const advancePaid = parseFloat(advanceInput.value) || 0;
+      const balance = Math.max(0, totalPayable - advancePaid);
+
+      document.getElementById("calcDays").innerText = days;
+      document.getElementById("calcBase").innerText = `₹${baseRate}`;
+      document.getElementById("calcDisc").innerText = `-₹${discountAmt} (${discountPct * 100}%)`;
+      document.getElementById("calcDeposit").innerText = `₹${deposit}`;
+      document.getElementById("calcTotal").innerText = `₹${totalPayable}`;
+      document.getElementById("calcBalance").innerText = `₹${balance}`;
+    }
+
+    // Handle ID Upload and Base64 conversion
+    function handleIdFile(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(event) {
+        document.getElementById("idProofBase64").value = event.target.result;
+        document.getElementById("idImageTag").src = event.target.result;
+        document.getElementById("idPreviewBox").classList.remove("hidden");
+      };
+      reader.readAsDataURL(file);
+    }
+
+    // Mock Sample ID generator for instant testing
+    function generateMockId() {
+      const canvas = document.createElement("canvas");
+      canvas.width = 300; canvas.height = 180;
+      const ctx = canvas.getContext("2d");
+      ctx.fillStyle = "#f8fafc"; ctx.fillRect(0, 0, 300, 180);
+      ctx.fillStyle = "#0f172a"; ctx.font = "bold 14px sans-serif";
+      ctx.fillText("GOVERNMENT IDENTITY PROOF", 25, 30);
+      ctx.fillStyle = "#475569"; ctx.font = "11px sans-serif";
+      ctx.fillText("Name: Demo Verified Citizen", 25, 60);
+      ctx.fillText("DOB: 18/04/1994   Gender: M", 25, 80);
+      ctx.fillText("ID No: 5489-3210-9941", 25, 100);
+      ctx.fillStyle = "#0284c7"; ctx.fillRect(25, 120, 80, 40);
+      ctx.fillStyle = "#ffffff"; ctx.font = "bold 10px sans-serif";
+      ctx.fillText("OFFICIAL SEAL", 30, 145);
+
+      const base64 = canvas.toDataURL("image/jpeg");
+      document.getElementById("idProofBase64").value = base64;
+      document.getElementById("idImageTag").src = base64;
+      document.getElementById("idPreviewBox").classList.remove("hidden");
+    }
+
+    async function submitNewBooking(e) {
+      e.preventDefault();
+      const idBase64 = document.getElementById("idProofBase64").value;
+      if (!idBase64) {
+        alert("ID Proof Photo is strictly mandatory before proceeding.");
+        return;
+      }
+
+      const saveBtn = document.getElementById("saveBookingBtn");
+      saveBtn.disabled = true;
+      saveBtn.innerText = "Saving to Google Sheet...";
+
+      const spaceId = document.getElementById("modalSpaceSelect").value;
+      const bookingId = "BK-" + Date.now().toString().slice(-6);
+
+      const baseAmount = parseInt(document.getElementById("calcBase").innerText.replace("₹", ""));
+      const discountAmt = parseInt(document.getElementById("calcDisc").innerText.replace("-₹", "").split(" ")[0]);
+      const deposit = parseInt(document.getElementById("calcDeposit").innerText.replace("₹", ""));
+      const advance = parseFloat(document.getElementById("modalAdvance").value) || 0;
+      const netRent = baseAmount - discountAmt;
+
+      const bookingRecord = {
+        booking_id: bookingId,
+        space_id: spaceId,
+        start_date: document.getElementById("modalStartDate").value,
+        end_date: document.getElementById("modalEndDate").value,
+        slot_type: document.getElementById("modalSlotType").value,
+        base_amount: baseAmount,
+        discount_type: document.getElementById("modalDiscount").value,
+        discount_amount: discountAmt,
+        net_rent: netRent,
+        caution_deposit: deposit,
+        advance_paid: advance,
+        balance_paid: 0,
+        balance_status: (netRent + deposit - advance) <= 0 ? "Cleared" : "Pending",
+        deposit_status: "Held"
+      };
+
+      const tenantRecord = {
+        booking_id: bookingId,
+        full_name: document.getElementById("tName").value,
+        age: document.getElementById("tAge").value,
+        gender: document.getElementById("tGender").value,
+        phone_number: document.getElementById("tPhone").value,
+        id_proof_base64: idBase64
+      };
+
+      // 1. Local update for zero lag
+      DB.bookings.unshift(bookingRecord);
+      DB.tenants.unshift({ ...tenantRecord, id_proof_url: idBase64 });
+      const spaceObj = DB.spaces.find(s => s.space_id === spaceId);
+      if (spaceObj) spaceObj.status = "Booked";
+      renderDashboard();
+      closeBookingModal();
+
+      // 2. Push to Google Apps Script backend if configured
+      if (API_URL && API_URL !== "YOUR_APPS_SCRIPT_WEB_APP_URL") {
+        try {
+          await fetch(API_URL, {
+            method: "POST",
+            body: JSON.stringify({
+              action: "create_booking",
+              payload: { booking: bookingRecord, tenant: tenantRecord }
+            })
+          });
+        } catch (err) {
+          console.error("Backend error:", err);
+        }
+      }
+
+      saveBtn.disabled = false;
+      saveBtn.innerText = "Confirm & Save Booking";
+    }
+
+    function openTenantDrawer(bookingId) {
+      const b = DB.bookings.find(item => item.booking_id === bookingId);
+      const t = DB.tenants.find(item => item.booking_id === bookingId);
+      const s = DB.spaces.find(item => item.space_id === b.space_id);
+      if (!b || !t) return;
+
+      const balance = (Number(b.net_rent) + Number(b.caution_deposit) - Number(b.advance_paid) - Number(b.balance_paid || 0));
+
+      const drawer = document.getElementById("drawerContent");
+      drawer.innerHTML = `
+        <div class="bg-indigo-50 p-3 rounded-xl border border-indigo-100">
+          <span class="text-indigo-900 font-bold block">${s ? s.name : b.space_id}</span>
+          <span class="text-[11px] text-indigo-700">Slot: ${b.start_date} to ${b.end_date}</span>
+        </div>
+
+        <div>
+          <h4 class="font-bold text-slate-700 mb-1">Tenant Profile</h4>
+          <p class="text-sm font-semibold text-slate-800">${t.full_name} (${t.gender}, Age: ${t.age})</p>
+          <p class="text-slate-500 font-mono">${t.phone_number}</p>
+        </div>
+
+        <div>
+          <h4 class="font-bold text-slate-700 mb-1">ID Proof Document</h4>
+          <img src="${t.id_proof_url}" class="w-full rounded-xl border border-slate-300 shadow-sm max-h-48 object-cover">
+        </div>
+
+        <div class="bg-slate-50 p-3 rounded-xl border space-y-1">
+          <div class="flex justify-between"><span>Net Rent:</span><span class="font-semibold">₹${b.net_rent}</span></div>
+          <div class="flex justify-between"><span>Caution Deposit:</span><span class="font-semibold">₹${b.caution_deposit}</span></div>
+          <div class="flex justify-between text-emerald-600"><span>Advance Paid:</span><span class="font-semibold">₹${b.advance_paid}</span></div>
+          <div class="flex justify-between text-amber-600 font-bold text-xs pt-1 border-t"><span>Remaining Balance:</span><span>₹${balance}</span></div>
+        </div>
+
+        ${balance > 0 ? `
+          <button onclick="settleBalance('${b.booking_id}', ${balance})" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-xl transition">
+            Collect Balance Payment (₹${balance})
+          </button>
+        ` : `
+          <div class="text-center p-2 bg-emerald-50 text-emerald-800 font-bold rounded-xl border border-emerald-200">
+            ✓ Payment Fully Cleared
+          </div>
+        `}
+
+        <button onclick="releaseUnit('${b.space_id}', '${b.booking_id}')" class="w-full bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold py-2.5 rounded-xl border border-rose-200 transition">
+          Release Unit & Mark Cleaned
+        </button>
+      `;
+
+      document.getElementById("tenantDrawer").classList.remove("hidden");
+    }
+
+    async function settleBalance(bookingId, amount) {
+      const b = DB.bookings.find(item => item.booking_id === bookingId);
+      if (!b) return;
+      b.balance_paid = amount;
+      b.balance_status = "Cleared";
+      renderDashboard();
+      openTenantDrawer(bookingId);
+
+      if (API_URL && API_URL !== "YOUR_APPS_SCRIPT_WEB_APP_URL") {
+        fetch(API_URL, {
+          method: "POST",
+          body: JSON.stringify({
+            action: "update_payment",
+            payload: { booking_id: bookingId, balance_paid: amount, balance_status: "Cleared" }
+          })
+        });
+      }
+    }
+
+    async function releaseUnit(spaceId, bookingId) {
+      const s = DB.spaces.find(item => item.space_id === spaceId);
+      if (s) s.status = "Available";
+      renderDashboard();
+      closeTenantDrawer();
+
+      if (API_URL && API_URL !== "YOUR_APPS_SCRIPT_WEB_APP_URL") {
+        fetch(API_URL, {
+          method: "POST",
+          body: JSON.stringify({
+            action: "update_unit_status",
+            payload: { space_id: spaceId, status: "Available" }
+          })
+        });
+      }
+    }
+
+    function quickBookSpace(spaceId) {
+      document.getElementById("modalSpaceSelect").value = spaceId;
+      openBookingModal();
+    }
+
+    function openBookingModal() {
+      document.getElementById("bookingModal").classList.remove("hidden");
+      calculatePricing();
+    }
+
+    function closeBookingModal() {
+      document.getElementById("bookingModal").classList.add("hidden");
+    }
+
+    function closeTenantDrawer() {
+      document.getElementById("tenantDrawer").classList.add("hidden");
+    }
+  </script>
+</body>
+</html>
