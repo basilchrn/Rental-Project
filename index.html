@@ -3,9 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#1e1b4b">
+
+  <!-- Web App Manifest -->
+  <link rel="manifest" href="manifest.json">
+
+  <!-- iOS PWA Compatibility -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="theme-color" content="#1e1b4b">
+  <meta name="apple-mobile-web-app-title" content="RentalHub">
+
   <title>Rental Manager</title>
   <link rel="stylesheet" href="style.css">
 </head>
@@ -19,6 +26,9 @@
         <p>Day & Slot Manager</p>
       </div>
       <div class="header-actions">
+        <button type="button" id="pwaInstallBtn" onclick="triggerInstallApp()" class="btn btn-amber hidden">
+          📲 Install App
+        </button>
         <button type="button" onclick="loadFromSheets()" class="btn btn-outline" id="syncBtn">
           🔄 Refresh
         </button>
@@ -676,6 +686,42 @@
 
     function closeTenantDrawer() {
       document.getElementById("tenantDrawer").classList.add("hidden");
+    }
+
+    // Register Service Worker for PWA
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("./sw.js")
+          .then((reg) => console.log("Service Worker registered successfully:", reg.scope))
+          .catch((err) => console.warn("Service Worker registration failed:", err));
+      });
+    }
+    
+    // Android In-App Install Prompt Handler
+    let deferredPrompt = null;
+    window.addEventListener("beforeinstallprompt", (e) => {
+      // Prevent default mini-infobar on mobile Chrome
+      e.preventDefault();
+      deferredPrompt = e;
+    
+      // Show an Install button in the header if available
+      const installBtn = document.getElementById("pwaInstallBtn");
+      if (installBtn) {
+        installBtn.classList.remove("hidden");
+      }
+    });
+    
+    function triggerInstallApp() {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      deferredPrompt.userChoice.then((choiceResult) => {
+        if (choiceResult.outcome === "accepted") {
+          console.log("User installed the rental app.");
+        }
+        deferredPrompt = null;
+        const installBtn = document.getElementById("pwaInstallBtn");
+        if (installBtn) installBtn.classList.add("hidden");
+      });
     }
   </script>
 </body>
