@@ -1,104 +1,69 @@
 /**
- * Offline-first Data Engine and Google Sheets Backend Connector
- * Uses pure Vanilla JS with zero external dependencies.
+ * Data Engine and Google Sheets Backend Connector
+ * Pure Vanilla JS — strictly reads and writes with Google Sheets.
  */
 
-// OPTIONAL: Paste your deployed Google Apps Script URL here when ready.
-// If left empty, the application functions 100% offline via localStorage.
+// PASTE YOUR DEPLOYED GOOGLE APPS SCRIPT WEB APP URL HERE:
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbylpeucXe9la6adHK01Mgewjv46hCQOTQyROjYU8yvV2tWCAfyJ7ePiVp1zVZX1IKKx/exec";
 
-const STORAGE_KEY = "RENTAL_MANAGER_DB_V1";
+const CACHE_KEY = "RENTAL_MANAGER_LIVE_CACHE";
 
-// Default Seed Data
-const DEFAULT_DB = {
-  spaces: [
-    { space_id: "SP-01", name: "North Hall (Capacity: 100)", full_day_rate: 8000, half_day_rate: 4500, default_deposit: 2000, allowed_options: "FullDay, CombinedDays", status: "Available" },
-    { space_id: "SP-02", name: "Studio A (A/C, Soundproof)", full_day_rate: 5000, half_day_rate: 3000, default_deposit: 1500, allowed_options: "FullDay, HalfDay", status: "Available" },
-    { space_id: "SP-03", name: "Rooftop Open Terrace", full_day_rate: 6000, half_day_rate: 3500, default_deposit: 2000, allowed_options: "FullDay, CombinedDays", status: "Available" },
-    { space_id: "SP-04", name: "Conference Suite B", full_day_rate: 3500, half_day_rate: 2000, default_deposit: 1000, allowed_options: "FullDay, HalfDay", status: "Available" }
-  ],
-  bookings: [],
-  tenants: []
-};
-
-// Data Store Controller
 const DataStore = {
+  // Return cached remote data or empty structure
   get() {
     try {
-      const data = localStorage.getItem(STORAGE_KEY);
-      return data ? JSON.parse(data) : JSON.parse(JSON.stringify(DEFAULT_DB));
+      const data = localStorage.getItem(CACHE_KEY);
+      return data ? JSON.parse(data) : { spaces: [], bookings: [], tenants: [] };
     } catch (e) {
-      console.warn("Storage read error, using fallback data:", e);
-      return JSON.parse(JSON.stringify(DEFAULT_DB));
+      return { spaces: [], bookings: [], tenants: [] };
     }
   },
 
-  save(db) {
+  saveLocalCache(db) {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+      localStorage.setItem(CACHE_KEY, JSON.stringify(db));
     } catch (e) {
-      console.error("Storage save failed:", e);
+      console.error("Local cache save failed:", e);
     }
   },
 
-  exportJSON() {
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(this.get(), null, 2));
-    const a = document.createElement("a");
-    a.setAttribute("href", dataStr);
-    a.setAttribute("download", `Rental_Data_Backup_${new Date().toISOString().slice(0, 10)}.json`);
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-  },
-
-  importJSON(file, callback) {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const parsed = JSON.parse(e.target.result);
-        if (parsed.spaces && parsed.bookings && parsed.tenants) {
-          this.save(parsed);
-          callback(true, "Data imported successfully.");
-        } else {
-          callback(false, "Invalid data structure in backup file.");
-        }
-      } catch (err) {
-        callback(false, "Error reading JSON file.");
-      }
-    };
-    reader.readAsText(file);
-  },
-
-  async syncWithSheets() {
+  // Pull fresh data directly from Google Sheets
+  async fetchFromSheets() {
     if (!APPS_SCRIPT_URL) {
-      return { success: false, message: "Apps Script URL not set. Operating in offline localStorage mode." };
+      return { 
+        success: false, 
+        message: "Google Apps Script URL is not configured. Please set APPS_SCRIPT_URL in data-sync.js." 
+      };
     }
+
     try {
       const res = await fetch(APPS_SCRIPT_URL);
       const json = await res.json();
+
       if (json.status === "success" && json.data) {
-        const local = this.get();
-        if (json.data.spaces && json.data.spaces.length) local.spaces = json.data.spaces;
-        local.bookings = json.data.bookings || [];
-        local.tenants = json.data.tenants || [];
-        this.save(local);
-        return { success: true, message: "Synced cleanly with Google Sheets." };
+        const liveData = {
+          spaces: Array.isArray(json.data.spaces) ? json.data.spaces : [],
+          bookings: Array.isArray(json.data.bookings) ? json.data.bookings : [],
+          tenants: Array.isArray(json.data.tenants) ? json.data.tenants : []
+        };
+        this.saveLocalCache(liveData);
+        return { success: true, data: liveData };
       }
-      return { success: false, message: "Sheets returned unexpected response." };
+      return { success: false, message: json.message || "Failed to parse Google Sheets response." };
     } catch (err) {
-      return { success: false, message: err.toString() };
+      return { success: false, message: "Network error connecting to Google Sheets: " + err.toString() };
     }
   },
 
+  // POST operations directly to Apps Script
   async postToSheets(action, payload) {
-    if (!APPS_SCRIPT_URL) return;
-    try {
-      await fetch(APPS_SCRIPT_URL, {
-        method: "POST",
-        body: JSON.stringify({ action: action, payload: payload })
-      });
-    } catch (err) {
-      console.error("Sheets push error:", err);
+    if (!APPS_SCRIPT_URL) {
+      throw new Error("Cannot save: Google Apps Script URL not configured.");
     }
+    const response = await fetch(APPS_SCRIPT_URL, {
+      method: "POST",
+      body: JSON.stringify({ action: action, payload: payload })
+    });
+    return await response.json();
   }
 };
