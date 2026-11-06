@@ -3,16 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#1e1b4b">
-
-  <!-- Web App Manifest -->
-  <link rel="manifest" href="manifest.json">
-
-  <!-- iOS PWA Compatibility -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="RentalHub">
-
+  <meta name="theme-color" content="#1e1b4b">
   <title>Rental Manager</title>
   <link rel="stylesheet" href="style.css">
 </head>
@@ -26,9 +19,6 @@
         <p>Day & Slot Manager</p>
       </div>
       <div class="header-actions">
-        <button type="button" id="pwaInstallBtn" onclick="triggerInstallApp()" class="btn btn-amber hidden">
-          📲 Install App
-        </button>
         <button type="button" onclick="loadFromSheets()" class="btn btn-outline" id="syncBtn">
           🔄 Refresh
         </button>
@@ -84,6 +74,7 @@
             <tr>
               <th>Space</th>
               <th>Tenant</th>
+              <th>Pax</th>
               <th>Dates</th>
               <th>Rent</th>
               <th>Advance</th>
@@ -126,14 +117,14 @@
       <div class="modal-header">
         <div>
           <h3>New Slot Booking</h3>
-          <p style="font-size:0.7rem; color:var(--slate-300);">Register tenant, set F&F discount & capture ID</p>
+          <p style="font-size:0.7rem; color:var(--slate-300);">Register tenant, verify capacity & capture ID</p>
         </div>
         <button type="button" class="modal-close" onclick="closeBookingModal()">&times;</button>
       </div>
 
       <form id="bookingForm" onsubmit="submitNewBooking(event)" class="modal-body">
         
-        <!-- Slot & Space -->
+        <!-- Slot, Space & Pax Selection -->
         <div class="form-group-card">
           <strong style="color:var(--slate-700);">1. Space & Slot Reservation</strong>
           <div class="grid-2">
@@ -159,6 +150,18 @@
               <label for="modalEndDate">End Date</label>
               <input type="date" id="modalEndDate" onchange="calculatePricing()" required>
             </div>
+          </div>
+
+          <!-- Total Pax Field -->
+          <div>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <label for="modalTotalPax">Total Pax (Guests)</label>
+              <span id="paxCapacityBadge" style="font-size:0.65rem; color:var(--slate-500); font-weight:700;">Cap: --</span>
+            </div>
+            <input type="number" id="modalTotalPax" min="1" value="1" oninput="calculatePricing()" required style="font-weight:700;">
+            <span id="extraPaxNotice" class="hidden" style="color:var(--amber); font-size:0.65rem; font-weight:700; display:block; margin-top:2px;">
+              ⚠️ Exceeds capacity by <span id="excessPaxCount">0</span> pax (+₹200/pax applied).
+            </span>
           </div>
         </div>
 
@@ -202,7 +205,7 @@
           </div>
         </div>
 
-        <!-- Rates, Caution Deposit Toggle & % Discount Input -->
+        <!-- Rates, Caution Deposit Toggle & % / ₹ Discount -->
         <div class="form-group-card accent">
           <strong style="color:var(--primary);">3. Rates & Deposit Settings</strong>
           
@@ -217,53 +220,33 @@
               <span class="slider"></span>
             </label>
           </div>
-        
+
           <div class="grid-2">
             <div>
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.2rem;">
                 <label for="modalDiscount" style="margin-bottom: 0;">Discount</label>
-                <!-- Unit Mode Switch (% or ₹) -->
                 <div style="display: inline-flex; background: var(--slate-200); border-radius: var(--radius-sm); padding: 2px;">
-                  <button 
-                    type="button" 
-                    id="btnDiscPct" 
-                    onclick="setDiscountMode('pct')" 
-                    style="padding: 2px 8px; font-size: 0.65rem; min-height: unset; border-radius: 3px; background: var(--primary-accent); color: #fff;">
-                    %
-                  </button>
-                  <button 
-                    type="button" 
-                    id="btnDiscFlat" 
-                    onclick="setDiscountMode('flat')" 
-                    style="padding: 2px 8px; font-size: 0.65rem; min-height: unset; border-radius: 3px; background: transparent; color: var(--slate-700);">
-                    ₹
-                  </button>
+                  <button type="button" id="btnDiscPct" onclick="setDiscountMode('pct')" style="padding: 2px 8px; font-size: 0.65rem; min-height: unset; border-radius: 3px; background: var(--primary-accent); color: #fff;">%</button>
+                  <button type="button" id="btnDiscFlat" onclick="setDiscountMode('flat')" style="padding: 2px 8px; font-size: 0.65rem; min-height: unset; border-radius: 3px; background: transparent; color: var(--slate-700);">₹</button>
                 </div>
               </div>
               <div style="position: relative;">
-                <input 
-                  type="number" 
-                  id="modalDiscount" 
-                  min="0" 
-                  step="any" 
-                  placeholder="e.g. 10" 
-                  oninput="calculatePricing()" 
-                  style="font-weight: 600; padding-right: 1.5rem;"
-                >
+                <input type="number" id="modalDiscount" min="0" step="any" placeholder="e.g. 10" oninput="calculatePricing()" style="font-weight: 600; padding-right: 1.5rem;">
                 <span id="discountUnitLabel" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-weight: 700; color: var(--slate-400); font-size: 0.75rem;">%</span>
               </div>
             </div>
-          
+
             <div>
               <label for="modalAdvance">Advance Received (₹) <span style="color:var(--rose);">*</span></label>
               <input type="number" id="modalAdvance" min="0" placeholder="Enter advance amount" oninput="calculatePricing()" style="font-weight:600;">
               <span id="advanceWarning" class="hidden" style="color:var(--rose); font-size:0.65rem; font-weight:700; display:block; margin-top:2px;">⚠️ Advance amount is required.</span>
             </div>
           </div>
-        
+
           <div class="ledger-summary-box">
             <div class="ledger-row"><span>Base Rent (<span id="calcDays">1</span> day(s)):</span><b id="calcBase">₹0</b></div>
             <div class="ledger-row" style="color:var(--rose);"><span>Discount (<span id="calcDiscPercent">0</span>%):</span><span id="calcDisc">-₹0</span></div>
+            <div class="ledger-row" style="color:var(--amber);"><span>Extra Pax Surcharge (+₹200/pax):</span><b id="calcExtraPax">₹0</b></div>
             <div class="ledger-row"><span>Caution Deposit:</span><b id="calcDeposit">₹0</b></div>
             <div class="ledger-row total"><span>Total Payable:</span><span id="calcTotal">₹0</span></div>
             <div class="ledger-row" style="color:var(--amber); font-weight:800;"><span>Remaining Balance:</span><span id="calcBalance">₹0</span></div>
@@ -297,13 +280,20 @@
     let currentDB = { spaces: [], bookings: [], tenants: [] };
     let currentDiscountMode = 'pct';
 
+    window.addEventListener("DOMContentLoaded", () => {
+      const today = new Date().toISOString().split("T")[0];
+      document.getElementById("modalStartDate").value = today;
+      document.getElementById("modalEndDate").value = today;
+      loadFromSheets();
+    });
+
     function setDiscountMode(mode) {
       currentDiscountMode = mode;
       const btnPct = document.getElementById("btnDiscPct");
       const btnFlat = document.getElementById("btnDiscFlat");
       const unitLabel = document.getElementById("discountUnitLabel");
       const discInput = document.getElementById("modalDiscount");
-    
+
       if (mode === 'pct') {
         btnPct.style.background = "var(--primary-accent)";
         btnPct.style.color = "#ffffff";
@@ -321,22 +311,12 @@
         discInput.placeholder = "e.g. 1500";
         discInput.removeAttribute("max");
       }
-    
       calculatePricing();
     }
 
-    window.addEventListener("DOMContentLoaded", () => {
-      const today = new Date().toISOString().split("T")[0];
-      document.getElementById("modalStartDate").value = today;
-      document.getElementById("modalEndDate").value = today;
-      loadFromSheets();
-    });
-
     function scrollToSection(id) {
       const element = document.getElementById(id);
-      if (element) {
-        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
+      if (element) element.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     async function loadFromSheets() {
@@ -385,7 +365,7 @@
       `;
 
       document.getElementById("bookingsTableBody").innerHTML = `
-        <tr><td colspan="7" style="text-align:center; padding:1.5rem; color:var(--slate-400);">No active bookings found in sheet.</td></tr>
+        <tr><td colspan="8" style="text-align:center; padding:1.5rem; color:var(--slate-400);">No active bookings found in sheet.</td></tr>
       `;
     }
 
@@ -396,7 +376,7 @@
         return;
       }
       select.innerHTML = currentDB.spaces.map(s => 
-        `<option value="${s.space_id}">${s.name} (₹${s.full_day_rate}/day)</option>`
+        `<option value="${s.space_id}">${s.name} (Cap: ${s.pax_capacity || 'N/A'})</option>`
       ).join("");
       calculatePricing();
     }
@@ -414,7 +394,8 @@
 
       currentDB.bookings.forEach(b => {
         if (String(b.balance_status).toLowerCase() === "pending") {
-          pendingBalance += (Number(b.net_rent || 0) + Number(b.caution_deposit || 0) - Number(b.advance_paid || 0) - Number(b.balance_paid || 0));
+          const extra = Number(b.extra_pax_charge || 0);
+          pendingBalance += (Number(b.net_rent || 0) + extra + Number(b.caution_deposit || 0) - Number(b.advance_paid || 0) - Number(b.balance_paid || 0));
         }
       });
 
@@ -438,12 +419,17 @@
                 <span class="badge ${isBooked ? 'badge-booked' : 'badge-available'}">${s.status || 'Available'}</span>
               </div>
               <h3>${s.name}</h3>
-              <p class="rate-info">Daily: <b>₹${s.full_day_rate}</b> | Default Deposit: ₹${s.default_deposit}</p>
+              <p class="rate-info">
+                Daily: <b>₹${s.full_day_rate}</b> | 
+                Capacity: <b>${s.pax_capacity || 'N/A'} Pax</b>
+              </p>
               
               ${isBooked && tenant ? `
                 <div class="active-tenant-box">
                   <strong>${tenant.full_name} (${tenant.phone_number})</strong>
-                  <div style="font-size:0.68rem; margin-top:2px;">Dates: ${currentBooking.start_date} → ${currentBooking.end_date}</div>
+                  <div style="font-size:0.68rem; margin-top:2px;">
+                    Pax: <b>${currentBooking.total_pax || tenant.total_pax || 1} Guests</b> | Dates: ${currentBooking.start_date} → ${currentBooking.end_date}
+                  </div>
                 </div>
               ` : `
                 <p style="font-size:0.7rem; color:var(--slate-400); font-style:italic; margin-bottom:0.75rem;">
@@ -470,19 +456,21 @@
       // Bookings Table
       const tBody = document.getElementById("bookingsTableBody");
       if (currentDB.bookings.length === 0) {
-        tBody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:1.5rem; color:var(--slate-400);">No reservations recorded yet in sheet.</td></tr>`;
+        tBody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:1.5rem; color:var(--slate-400);">No reservations recorded yet in sheet.</td></tr>`;
       } else {
         tBody.innerHTML = currentDB.bookings.map(b => {
           const space = currentDB.spaces.find(s => s.space_id === b.space_id);
           const tenant = currentDB.tenants.find(t => t.booking_id === b.booking_id);
-          const balance = (Number(b.net_rent || 0) + Number(b.caution_deposit || 0) - Number(b.advance_paid || 0) - Number(b.balance_paid || 0));
+          const extra = Number(b.extra_pax_charge || 0);
+          const balance = (Number(b.net_rent || 0) + extra + Number(b.caution_deposit || 0) - Number(b.advance_paid || 0) - Number(b.balance_paid || 0));
 
           return `
             <tr>
               <td style="font-weight:700;">${space ? space.name : b.space_id}</td>
               <td>${tenant ? tenant.full_name : 'N/A'}</td>
+              <td style="font-weight:700; color:var(--slate-700);">${b.total_pax || (tenant ? tenant.total_pax : 1)}</td>
               <td style="font-size:0.7rem;">${b.start_date} → ${b.end_date}</td>
-              <td style="font-weight:700;">₹${b.net_rent}</td>
+              <td style="font-weight:700;">₹${Number(b.net_rent || 0) + extra}</td>
               <td style="color:var(--emerald); font-weight:700;">₹${b.advance_paid}</td>
               <td style="color:${balance > 0 ? 'var(--amber)' : 'var(--slate-400)'}; font-weight:800;">₹${balance}</td>
               <td style="text-align:right;">
@@ -496,45 +484,62 @@
       }
     }
 
-    // Dynamic Pricing Engine with Manual % Discount and Non-populated Advance
+    // Pricing & Pax Surcharge Engine
     function calculatePricing() {
       const spaceId = document.getElementById("modalSpaceSelect").value;
       const space = currentDB.spaces.find(s => s.space_id === spaceId);
       if (!space) return;
-    
+
+      const capacity = Number(space.pax_capacity || 0);
+      document.getElementById("paxCapacityBadge").innerText = capacity > 0 ? `Cap: ${capacity} Pax` : "Cap: Unlimited";
+
       const slotType = document.getElementById("modalSlotType").value;
       const start = new Date(document.getElementById("modalStartDate").value);
       const end = new Date(document.getElementById("modalEndDate").value);
-    
+
       let days = Math.max(1, Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1);
       if (slotType === "HalfDay") days = 0.5;
-    
+
       const baseRate = days === 0.5 
         ? Number(space.half_day_rate || (space.full_day_rate * 0.6)) 
         : Number(space.full_day_rate) * days;
-    
-      // Calculate Discount according to current mode (% or ₹)
+
+      // Discount Calculation
       const discountInputVal = parseFloat(document.getElementById("modalDiscount").value) || 0;
       let discountAmt = 0;
       let displayPercent = "0";
-    
+
       if (currentDiscountMode === 'pct') {
         const discountPct = Math.min(100, Math.max(0, discountInputVal));
         discountAmt = Math.round(baseRate * (discountPct / 100));
         displayPercent = discountPct.toString();
       } else {
-        // Flat rupee mode: clamp to base rate so rent does not go negative
         discountAmt = Math.min(baseRate, Math.max(0, Math.round(discountInputVal)));
         displayPercent = baseRate > 0 ? ((discountAmt / baseRate) * 100).toFixed(1) : "0";
       }
-    
+
       const netRent = baseRate - discountAmt;
-    
+
+      // Pax Calculation: Extra ₹200 per pax above capacity
+      const totalPaxInput = document.getElementById("modalTotalPax");
+      const totalPax = Math.max(1, parseInt(totalPaxInput.value) || 1);
+      let extraPaxSurcharge = 0;
+      const excessPaxNotice = document.getElementById("extraPaxNotice");
+
+      if (capacity > 0 && totalPax > capacity) {
+        const excessPax = totalPax - capacity;
+        extraPaxSurcharge = excessPax * 200;
+        document.getElementById("excessPaxCount").innerText = excessPax;
+        excessPaxNotice.classList.remove("hidden");
+      } else {
+        excessPaxNotice.classList.add("hidden");
+      }
+
       // Caution Deposit Toggle
       const isDepositIncluded = document.getElementById("cautionDepositToggle").checked;
       const depositLabel = document.getElementById("depositToggleLabel");
       let deposit = 0;
-    
+
       if (isDepositIncluded) {
         deposit = Number(space.default_deposit || 0);
         depositLabel.innerText = `Standard deposit: ₹${deposit}`;
@@ -544,25 +549,25 @@
         depositLabel.innerText = "Deposit waived (₹0)";
         depositLabel.style.color = "var(--emerald)";
       }
-    
-      const totalPayable = netRent + deposit;
-    
-      // Advance calculation
+
+      const totalPayable = netRent + extraPaxSurcharge + deposit;
+
+      // Advance
       const advanceField = document.getElementById("modalAdvance");
       const advanceVal = advanceField.value.trim();
       const advancePaid = advanceVal === "" ? 0 : parseFloat(advanceVal) || 0;
       const balance = Math.max(0, totalPayable - advancePaid);
-    
+
       if (advanceVal !== "") {
         document.getElementById("advanceWarning").classList.add("hidden");
         advanceField.style.borderColor = "var(--slate-300)";
       }
-    
-      // Update dynamic ledger breakdown
+
       document.getElementById("calcDays").innerText = days;
       document.getElementById("calcBase").innerText = `₹${baseRate.toLocaleString()}`;
       document.getElementById("calcDiscPercent").innerText = displayPercent;
       document.getElementById("calcDisc").innerText = `-₹${discountAmt.toLocaleString()}`;
+      document.getElementById("calcExtraPax").innerText = `+₹${extraPaxSurcharge.toLocaleString()}`;
       document.getElementById("calcDeposit").innerText = `₹${deposit.toLocaleString()}`;
       document.getElementById("calcTotal").innerText = `₹${totalPayable.toLocaleString()}`;
       document.getElementById("calcBalance").innerText = `₹${balance.toLocaleString()}`;
@@ -583,11 +588,11 @@
 
     async function submitNewBooking(event) {
       event.preventDefault();
-    
+
       const advanceInput = document.getElementById("modalAdvance");
       const advanceVal = advanceInput.value.trim();
       const warningEl = document.getElementById("advanceWarning");
-    
+
       if (advanceVal === "" || isNaN(advanceVal) || parseFloat(advanceVal) < 0) {
         warningEl.classList.remove("hidden");
         advanceInput.style.borderColor = "var(--rose)";
@@ -595,32 +600,34 @@
         alert("Please enter the Advance Received amount (enter 0 if no advance collected).");
         return;
       }
-    
+
       const idBase64 = document.getElementById("idProofBase64").value;
       if (!idBase64) {
         alert("A tenant ID Proof photo is mandatory.");
         return;
       }
-    
+
       const saveBtn = document.getElementById("saveBookingBtn");
       saveBtn.disabled = true;
       saveBtn.innerText = "Syncing with Sheets...";
-    
+
       const spaceId = document.getElementById("modalSpaceSelect").value;
       const bookingId = "BK-" + Date.now().toString().slice(-6);
-    
+
       const baseAmount = parseInt(document.getElementById("calcBase").innerText.replace(/[^0-9]/g, ""));
       const discountAmt = parseInt(document.getElementById("calcDisc").innerText.replace(/[^0-9]/g, ""));
+      const extraPaxCharge = parseInt(document.getElementById("calcExtraPax").innerText.replace(/[^0-9]/g, ""));
       const deposit = parseInt(document.getElementById("calcDeposit").innerText.replace(/[^0-9]/g, ""));
       const advance = parseFloat(advanceVal);
       const netRent = baseAmount - discountAmt;
       const isDepositIncluded = document.getElementById("cautionDepositToggle").checked;
-    
+      const totalPax = parseInt(document.getElementById("modalTotalPax").value) || 1;
+
       const discountRawVal = parseFloat(document.getElementById("modalDiscount").value) || 0;
       const discountTypeString = currentDiscountMode === 'pct' 
         ? `${discountRawVal}%` 
         : `₹${discountRawVal} Flat`;
-    
+
       const bookingRecord = {
         booking_id: bookingId,
         space_id: spaceId,
@@ -631,23 +638,26 @@
         discount_type: discountTypeString,
         discount_amount: discountAmt,
         net_rent: netRent,
+        total_pax: totalPax,
+        extra_pax_charge: extraPaxCharge,
         caution_deposit: deposit,
         deposit_included: isDepositIncluded,
         advance_paid: advance,
         balance_paid: 0,
-        balance_status: (netRent + deposit - advance) <= 0 ? "Cleared" : "Pending",
+        balance_status: (netRent + extraPaxCharge + deposit - advance) <= 0 ? "Cleared" : "Pending",
         deposit_status: deposit > 0 ? "Held" : "Waived"
       };
-    
+
       const tenantRecord = {
         booking_id: bookingId,
         full_name: document.getElementById("tName").value,
         age: document.getElementById("tAge").value,
         gender: document.getElementById("tGender").value,
         phone_number: document.getElementById("tPhone").value,
-        id_proof_base64: idBase64
+        id_proof_base64: idBase64,
+        total_pax: totalPax
       };
-    
+
       try {
         await DataStore.postToSheets("create_booking", { booking: bookingRecord, tenant: tenantRecord });
         closeBookingModal();
@@ -669,7 +679,8 @@
       const s = currentDB.spaces.find(i => i.space_id === b.space_id);
       if (!b || !t) return;
 
-      const balance = (Number(b.net_rent || 0) + Number(b.caution_deposit || 0) - Number(b.advance_paid || 0) - Number(b.balance_paid || 0));
+      const extra = Number(b.extra_pax_charge || 0);
+      const balance = (Number(b.net_rent || 0) + extra + Number(b.caution_deposit || 0) - Number(b.advance_paid || 0) - Number(b.balance_paid || 0));
 
       const drawer = document.getElementById("drawerContent");
       drawer.innerHTML = `
@@ -682,6 +693,9 @@
           <label>TENANT PROFILE</label>
           <div style="font-size:0.95rem; font-weight:700;">${t.full_name} (${t.gender}, Age: ${t.age})</div>
           <div style="font-family:monospace; color:var(--slate-600);">${t.phone_number}</div>
+          <div style="margin-top:4px; font-weight:700; color:var(--primary);">
+            Total Pax: ${b.total_pax || t.total_pax || 1} Guests (Space Cap: ${s ? s.pax_capacity || 'N/A' : 'N/A'})
+          </div>
         </div>
 
         <div>
@@ -695,6 +709,7 @@
 
         <div style="background-color:var(--slate-50); padding:0.75rem; border-radius:var(--radius-md); border:1px solid var(--slate-200); display:flex; flex-direction:column; gap:0.25rem;">
           <div class="ledger-row"><span>Net Rent:</span><b>₹${b.net_rent}</b></div>
+          ${extra > 0 ? `<div class="ledger-row" style="color:var(--amber);"><span>Extra Pax Surcharge:</span><b>+₹${extra}</b></div>` : ''}
           <div class="ledger-row">
             <span>Caution Deposit:</span>
             <b>${Number(b.caution_deposit) > 0 ? `₹${b.caution_deposit} (Held)` : 'Waived (₹0)'}</b>
@@ -750,9 +765,10 @@
       document.getElementById("bookingModal").classList.remove("hidden");
       document.getElementById("modalAdvance").value = "";
       document.getElementById("modalDiscount").value = "";
+      document.getElementById("modalTotalPax").value = 1;
       document.getElementById("advanceWarning").classList.add("hidden");
       document.getElementById("modalAdvance").style.borderColor = "var(--slate-300)";
-      setDiscountMode('pct'); // Default to % on open
+      setDiscountMode('pct');
       calculatePricing();
     }
 
@@ -762,42 +778,6 @@
 
     function closeTenantDrawer() {
       document.getElementById("tenantDrawer").classList.add("hidden");
-    }
-
-    // Register Service Worker for PWA
-    if ("serviceWorker" in navigator) {
-      window.addEventListener("load", () => {
-        navigator.serviceWorker.register("./sw.js")
-          .then((reg) => console.log("Service Worker registered successfully:", reg.scope))
-          .catch((err) => console.warn("Service Worker registration failed:", err));
-      });
-    }
-    
-    // Android In-App Install Prompt Handler
-    let deferredPrompt = null;
-    window.addEventListener("beforeinstallprompt", (e) => {
-      // Prevent default mini-infobar on mobile Chrome
-      e.preventDefault();
-      deferredPrompt = e;
-    
-      // Show an Install button in the header if available
-      const installBtn = document.getElementById("pwaInstallBtn");
-      if (installBtn) {
-        installBtn.classList.remove("hidden");
-      }
-    });
-    
-    function triggerInstallApp() {
-      if (!deferredPrompt) return;
-      deferredPrompt.prompt();
-      deferredPrompt.userChoice.then((choiceResult) => {
-        if (choiceResult.outcome === "accepted") {
-          console.log("User installed the rental app.");
-        }
-        deferredPrompt = null;
-        const installBtn = document.getElementById("pwaInstallBtn");
-        if (installBtn) installBtn.classList.add("hidden");
-      });
     }
   </script>
 </body>
