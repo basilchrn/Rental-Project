@@ -13,16 +13,13 @@
     <div class="max-w-6xl header-inner">
       <div>
         <h1>Premises Day Rental Hub</h1>
-        <p>Single & Combined Day Slot Manager</p>
+        <p>Connected to Google Sheets</p>
       </div>
       <div class="header-actions">
-        <button type="button" onclick="triggerSync()" class="btn btn-outline" id="syncBtn">
-          Sync Sheets
+        <button type="button" onclick="loadFromSheets()" class="btn btn-outline" id="syncBtn">
+          🔄 Refresh Sheets
         </button>
-        <button type="button" onclick="DataStore.exportJSON()" class="btn btn-secondary">
-          Export Backup
-        </button>
-        <button type="button" onclick="openBookingModal()" class="btn btn-amber">
+        <button type="button" onclick="openBookingModal()" class="btn btn-amber" id="newBookingBtn" disabled>
           + New Booking
         </button>
       </div>
@@ -35,16 +32,16 @@
     <!-- KPI METRICS -->
     <div class="stats-grid">
       <div class="stat-card">
-        <div class="label">Total Units</div>
-        <div id="statTotal" class="value">4</div>
+        <div class="label">Total Spaces</div>
+        <div id="statTotal" class="value">0</div>
       </div>
       <div class="stat-card">
         <div class="label">Available</div>
-        <div id="statAvailable" class="value text-emerald">--</div>
+        <div id="statAvailable" class="value text-emerald">0</div>
       </div>
       <div class="stat-card">
         <div class="label">Occupied</div>
-        <div id="statBooked" class="value text-rose">--</div>
+        <div id="statBooked" class="value text-rose">0</div>
       </div>
       <div class="stat-card">
         <div class="label">Pending Balance</div>
@@ -52,14 +49,14 @@
       </div>
     </div>
 
-    <!-- SPACES GRID -->
+    <!-- SPACES GRID SECTION -->
     <section>
       <div class="section-header">
         <h2>Premises Spaces & Slots</h2>
-        <span id="syncNotice" class="hidden text-amber" style="font-size:0.75rem; font-weight:700;">Syncing...</span>
+        <span id="syncNotice" class="text-amber" style="font-size:0.75rem; font-weight:700;">Loading from Google Sheets...</span>
       </div>
       <div id="spacesGrid" class="spaces-grid">
-        <!-- Rendered via renderApp() -->
+        <!-- Injected via renderApp() -->
       </div>
     </section>
 
@@ -67,9 +64,6 @@
     <section class="table-card">
       <div class="section-header">
         <h2>Active Bookings & Payments</h2>
-        <label class="btn btn-outline" style="color:var(--slate-700); border-color:var(--slate-300);">
-          Import Backup <input type="file" accept=".json" onchange="importData(event)" style="display:none;">
-        </label>
       </div>
       <div class="table-responsive">
         <table>
@@ -85,7 +79,7 @@
             </tr>
           </thead>
           <tbody id="bookingsTableBody">
-            <!-- Rendered via renderApp() -->
+            <!-- Injected via renderApp() -->
           </tbody>
         </table>
       </div>
@@ -168,7 +162,6 @@
             </p>
             <div style="display:flex; justify-content:center; gap:0.5rem; flex-wrap:wrap; align-items:center;">
               <input type="file" id="idProofInput" accept="image/*" capture="environment" onchange="handleIdUpload(event)">
-              <button type="button" class="btn btn-secondary" onclick="generateSampleId()">Use Test ID</button>
             </div>
             <img id="idImageTag" src="" alt="ID Preview" class="id-preview-img hidden">
             <input type="hidden" id="idProofBase64" required>
@@ -223,37 +216,98 @@
     </div>
   </div>
 
-  <!-- APPLICATION SCRIPT -->
+  <!-- APPLICATION LOGIC -->
   <script src="data-sync.js"></script>
   <script>
-    // Initialize App
+    let currentDB = { spaces: [], bookings: [], tenants: [] };
+
     window.addEventListener("DOMContentLoaded", () => {
       const today = new Date().toISOString().split("T")[0];
       document.getElementById("modalStartDate").value = today;
       document.getElementById("modalEndDate").value = today;
-      populateSpaceSelect();
-      renderApp();
+      
+      // Load directly from Google Sheets
+      loadFromSheets();
     });
 
+    async function loadFromSheets() {
+      const notice = document.getElementById("syncNotice");
+      const syncBtn = document.getElementById("syncBtn");
+      notice.classList.remove("hidden");
+      notice.innerText = "Syncing with Google Sheets...";
+      syncBtn.disabled = true;
+
+      const res = await DataStore.fetchFromSheets();
+      syncBtn.disabled = false;
+
+      if (res.success) {
+        currentDB = res.data;
+        notice.classList.add("hidden");
+        document.getElementById("newBookingBtn").disabled = currentDB.spaces.length === 0;
+        populateSpaceSelect();
+        renderApp();
+      } else {
+        notice.classList.remove("hidden");
+        notice.innerText = "Error: " + res.message;
+        // Check if there is any local cached data from a previous sync
+        currentDB = DataStore.get();
+        if (currentDB.spaces.length > 0) {
+          populateSpaceSelect();
+          renderApp();
+        } else {
+          renderEmptyState(res.message);
+        }
+      }
+    }
+
+    function renderEmptyState(message) {
+      document.getElementById("statTotal").innerText = "0";
+      document.getElementById("statAvailable").innerText = "0";
+      document.getElementById("statBooked").innerText = "0";
+      document.getElementById("statPending").innerText = "₹0";
+
+      document.getElementById("spacesGrid").innerHTML = `
+        <div style="grid-column: 1 / -1; background:#ffffff; border:1px dashed var(--slate-300); border-radius:var(--radius-xl); padding:2rem; text-align:center;">
+          <h3 style="font-size:1rem; font-weight:700; color:var(--slate-800); margin-bottom:0.5rem;">No Spaces Found in Google Sheet</h3>
+          <p style="font-size:0.75rem; color:var(--slate-500); max-width:24rem; margin:0 auto 1rem auto;">
+            ${message || "Ensure your 'Spaces' tab has entries and your Apps Script Web App URL is correctly entered in data-sync.js."}
+          </p>
+          <button type="button" onclick="loadFromSheets()" class="btn btn-primary">Retry Fetch</button>
+        </div>
+      `;
+
+      document.getElementById("bookingsTableBody").innerHTML = `
+        <tr><td colspan="7" style="text-align:center; padding:1.5rem; color:var(--slate-400);">No active bookings found in sheet.</td></tr>
+      `;
+    }
+
     function populateSpaceSelect() {
-      const db = DataStore.get();
       const select = document.getElementById("modalSpaceSelect");
-      select.innerHTML = db.spaces.map(s => `<option value="${s.space_id}">${s.name} (₹${s.full_day_rate}/day)</option>`).join("");
+      if (!currentDB.spaces.length) {
+        select.innerHTML = `<option value="">No spaces configured</option>`;
+        return;
+      }
+      select.innerHTML = currentDB.spaces.map(s => 
+        `<option value="${s.space_id}">${s.name} (₹${s.full_day_rate}/day)</option>`
+      ).join("");
       calculatePricing();
     }
 
     function renderApp() {
-      const db = DataStore.get();
+      if (!currentDB.spaces.length) {
+        renderEmptyState();
+        return;
+      }
 
-      // 1. Calculate Stats
-      const total = db.spaces.length;
-      const booked = db.spaces.filter(s => s.status === "Booked").length;
+      // Calculate KPI metrics
+      const total = currentDB.spaces.length;
+      const booked = currentDB.spaces.filter(s => String(s.status).toLowerCase() === "booked").length;
       const available = total - booked;
       let pendingBalance = 0;
 
-      db.bookings.forEach(b => {
-        if (b.balance_status === "Pending") {
-          pendingBalance += (Number(b.net_rent) + Number(b.caution_deposit) - Number(b.advance_paid) - Number(b.balance_paid || 0));
+      currentDB.bookings.forEach(b => {
+        if (String(b.balance_status).toLowerCase() === "pending") {
+          pendingBalance += (Number(b.net_rent || 0) + Number(b.caution_deposit || 0) - Number(b.advance_paid || 0) - Number(b.balance_paid || 0));
         }
       });
 
@@ -262,19 +316,19 @@
       document.getElementById("statAvailable").innerText = available;
       document.getElementById("statPending").innerText = `₹${pendingBalance.toLocaleString()}`;
 
-      // 2. Render Spaces Grid
+      // Render Spaces Grid
       const grid = document.getElementById("spacesGrid");
-      grid.innerHTML = db.spaces.map(s => {
-        const isBooked = s.status === "Booked";
-        const currentBooking = db.bookings.find(b => b.space_id === s.space_id && b.balance_status !== "Completed");
-        const tenant = currentBooking ? db.tenants.find(t => t.booking_id === currentBooking.booking_id) : null;
+      grid.innerHTML = currentDB.spaces.map(s => {
+        const isBooked = String(s.status).toLowerCase() === "booked";
+        const currentBooking = currentDB.bookings.find(b => b.space_id === s.space_id && String(b.balance_status).toLowerCase() !== "completed");
+        const tenant = currentBooking ? currentDB.tenants.find(t => t.booking_id === currentBooking.booking_id) : null;
 
         return `
           <div class="space-card ${isBooked ? 'is-booked' : ''}">
             <div>
               <div class="space-card-top">
                 <span style="font-size:0.7rem; font-weight:700; color:var(--slate-400);">${s.space_id}</span>
-                <span class="badge ${s.status === 'Available' ? 'badge-available' : 'badge-booked'}">${s.status}</span>
+                <span class="badge ${isBooked ? 'badge-booked' : 'badge-available'}">${s.status || 'Available'}</span>
               </div>
               <h3>${s.name}</h3>
               <p class="rate-info">Daily: <b>₹${s.full_day_rate}</b> | Deposit: ₹${s.default_deposit}</p>
@@ -286,7 +340,7 @@
                 </div>
               ` : `
                 <p style="font-size:0.7rem; color:var(--slate-400); font-style:italic; margin-bottom:0.75rem;">
-                  Options: ${s.allowed_options}
+                  Options: ${s.allowed_options || 'Full Day'}
                 </p>
               `}
             </div>
@@ -306,15 +360,15 @@
         `;
       }).join("");
 
-      // 3. Render Bookings Table
+      // Render Bookings Table
       const tBody = document.getElementById("bookingsTableBody");
-      if (db.bookings.length === 0) {
-        tBody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:1.5rem; color:var(--slate-400);">No reservations recorded yet.</td></tr>`;
+      if (currentDB.bookings.length === 0) {
+        tBody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:1.5rem; color:var(--slate-400);">No reservations recorded yet in sheet.</td></tr>`;
       } else {
-        tBody.innerHTML = db.bookings.map(b => {
-          const space = db.spaces.find(s => s.space_id === b.space_id);
-          const tenant = db.tenants.find(t => t.booking_id === b.booking_id);
-          const balance = (Number(b.net_rent) + Number(b.caution_deposit) - Number(b.advance_paid) - Number(b.balance_paid || 0));
+        tBody.innerHTML = currentDB.bookings.map(b => {
+          const space = currentDB.spaces.find(s => s.space_id === b.space_id);
+          const tenant = currentDB.tenants.find(t => t.booking_id === b.booking_id);
+          const balance = (Number(b.net_rent || 0) + Number(b.caution_deposit || 0) - Number(b.advance_paid || 0) - Number(b.balance_paid || 0));
 
           return `
             <tr>
@@ -336,9 +390,8 @@
     }
 
     function calculatePricing() {
-      const db = DataStore.get();
       const spaceId = document.getElementById("modalSpaceSelect").value;
-      const space = db.spaces.find(s => s.space_id === spaceId);
+      const space = currentDB.spaces.find(s => s.space_id === spaceId);
       if (!space) return;
 
       const slotType = document.getElementById("modalSlotType").value;
@@ -348,15 +401,15 @@
       let days = Math.max(1, Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1);
       if (slotType === "HalfDay") days = 0.5;
 
-      const baseRate = days === 0.5 ? space.half_day_rate : space.full_day_rate * days;
+      const baseRate = days === 0.5 ? Number(space.half_day_rate || (space.full_day_rate * 0.6)) : Number(space.full_day_rate) * days;
       const discountPct = parseFloat(document.getElementById("modalDiscount").value) || 0;
       const discountAmt = Math.round(baseRate * discountPct);
       const netRent = baseRate - discountAmt;
-      const deposit = space.default_deposit;
+      const deposit = Number(space.default_deposit || 0);
       const totalPayable = netRent + deposit;
 
       const advanceInput = document.getElementById("modalAdvance");
-      if (!advanceInput.value) advanceInput.value = Math.round(totalPayable * 0.3); // 30% default suggestion
+      if (!advanceInput.value) advanceInput.value = Math.round(totalPayable * 0.3);
       const advancePaid = parseFloat(advanceInput.value) || 0;
       const balance = Math.max(0, totalPayable - advancePaid);
 
@@ -381,29 +434,7 @@
       reader.readAsDataURL(file);
     }
 
-    function generateSampleId() {
-      const canvas = document.createElement("canvas");
-      canvas.width = 300; canvas.height = 180;
-      const ctx = canvas.getContext("2d");
-      ctx.fillStyle = "#f8fafc"; ctx.fillRect(0, 0, 300, 180);
-      ctx.fillStyle = "#0f172a"; ctx.font = "bold 13px sans-serif";
-      ctx.fillText("GOVERNMENT ID PROOF", 25, 30);
-      ctx.fillStyle = "#475569"; ctx.font = "11px sans-serif";
-      ctx.fillText("Name: Demo Verified Tenant", 25, 60);
-      ctx.fillText("DOB: 18/04/1994   Gender: M", 25, 80);
-      ctx.fillText("ID No: 5489-3210-9941", 25, 100);
-      ctx.fillStyle = "#4338ca"; ctx.fillRect(25, 120, 80, 40);
-      ctx.fillStyle = "#ffffff"; ctx.font = "bold 10px sans-serif";
-      ctx.fillText("OFFICIAL SEAL", 30, 145);
-
-      const base64 = canvas.toDataURL("image/jpeg");
-      document.getElementById("idProofBase64").value = base64;
-      const img = document.getElementById("idImageTag");
-      img.src = base64;
-      img.classList.remove("hidden");
-    }
-
-    function submitNewBooking(event) {
+    async function submitNewBooking(event) {
       event.preventDefault();
       const idBase64 = document.getElementById("idProofBase64").value;
       if (!idBase64) {
@@ -411,7 +442,10 @@
         return;
       }
 
-      const db = DataStore.get();
+      const saveBtn = document.getElementById("saveBookingBtn");
+      saveBtn.disabled = true;
+      saveBtn.innerText = "Syncing with Google Sheets...";
+
       const spaceId = document.getElementById("modalSpaceSelect").value;
       const bookingId = "BK-" + Date.now().toString().slice(-6);
 
@@ -444,32 +478,32 @@
         age: document.getElementById("tAge").value,
         gender: document.getElementById("tGender").value,
         phone_number: document.getElementById("tPhone").value,
-        id_proof_url: idBase64
+        id_proof_base64: idBase64
       };
 
-      db.bookings.unshift(bookingRecord);
-      db.tenants.unshift(tenantRecord);
-      const spaceObj = db.spaces.find(s => s.space_id === spaceId);
-      if (spaceObj) spaceObj.status = "Booked";
-
-      DataStore.save(db);
-      DataStore.postToSheets("create_booking", { booking: bookingRecord, tenant: tenantRecord });
-
-      renderApp();
-      closeBookingModal();
-      document.getElementById("bookingForm").reset();
-      document.getElementById("idProofBase64").value = "";
-      document.getElementById("idImageTag").classList.add("hidden");
+      try {
+        await DataStore.postToSheets("create_booking", { booking: bookingRecord, tenant: tenantRecord });
+        closeBookingModal();
+        document.getElementById("bookingForm").reset();
+        document.getElementById("idProofBase64").value = "";
+        document.getElementById("idImageTag").classList.add("hidden");
+        // Re-fetch authoritative sheet records
+        await loadFromSheets();
+      } catch (err) {
+        alert("Error saving booking: " + err.message);
+      } finally {
+        saveBtn.disabled = false;
+        saveBtn.innerText = "Confirm & Save Booking";
+      }
     }
 
     function openTenantDrawer(bookingId) {
-      const db = DataStore.get();
-      const b = db.bookings.find(i => i.booking_id === bookingId);
-      const t = db.tenants.find(i => i.booking_id === bookingId);
-      const s = db.spaces.find(i => i.space_id === b.space_id);
+      const b = currentDB.bookings.find(i => i.booking_id === bookingId);
+      const t = currentDB.tenants.find(i => i.booking_id === bookingId);
+      const s = currentDB.spaces.find(i => i.space_id === b.space_id);
       if (!b || !t) return;
 
-      const balance = (Number(b.net_rent) + Number(b.caution_deposit) - Number(b.advance_paid) - Number(b.balance_paid || 0));
+      const balance = (Number(b.net_rent || 0) + Number(b.caution_deposit || 0) - Number(b.advance_paid || 0) - Number(b.balance_paid || 0));
 
       const drawer = document.getElementById("drawerContent");
       drawer.innerHTML = `
@@ -486,7 +520,11 @@
 
         <div>
           <label>ID PROOF (VERIFIED)</label>
-          <img src="${t.id_proof_url}" style="width:100%; border-radius:var(--radius-md); border:1px solid var(--slate-300); max-height:10rem; object-fit:cover;">
+          ${t.id_proof_url ? `
+            <a href="${t.id_proof_url}" target="_blank">
+              <img src="${t.id_proof_url}" style="width:100%; border-radius:var(--radius-md); border:1px solid var(--slate-300); max-height:10rem; object-fit:cover;">
+            </a>
+          ` : `<p style="font-size:0.7rem; color:var(--slate-400);">No image URL available</p>`}
         </div>
 
         <div style="background-color:var(--slate-50); padding:0.75rem; border-radius:var(--radius-md); border:1px solid var(--slate-200); display:flex; flex-direction:column; gap:0.25rem;">
@@ -514,26 +552,24 @@
       document.getElementById("tenantDrawer").classList.remove("hidden");
     }
 
-    function settleBalance(bookingId, amount) {
-      const db = DataStore.get();
-      const b = db.bookings.find(i => i.booking_id === bookingId);
-      if (!b) return;
-      b.balance_paid = amount;
-      b.balance_status = "Cleared";
-      DataStore.save(db);
-      DataStore.postToSheets("update_payment", { booking_id: bookingId, balance_paid: amount, balance_status: "Cleared" });
-      renderApp();
-      openTenantDrawer(bookingId);
+    async function settleBalance(bookingId, amount) {
+      try {
+        await DataStore.postToSheets("update_payment", { booking_id: bookingId, balance_paid: amount, balance_status: "Cleared" });
+        await loadFromSheets();
+        openTenantDrawer(bookingId);
+      } catch (err) {
+        alert("Failed to update payment: " + err.message);
+      }
     }
 
-    function releaseUnit(spaceId, bookingId) {
-      const db = DataStore.get();
-      const s = db.spaces.find(i => i.space_id === spaceId);
-      if (s) s.status = "Available";
-      DataStore.save(db);
-      DataStore.postToSheets("update_unit_status", { space_id: spaceId, status: "Available" });
-      renderApp();
-      closeTenantDrawer();
+    async function releaseUnit(spaceId, bookingId) {
+      try {
+        await DataStore.postToSheets("update_unit_status", { space_id: spaceId, status: "Available" });
+        closeTenantDrawer();
+        await loadFromSheets();
+      } catch (err) {
+        alert("Failed to update unit: " + err.message);
+      }
     }
 
     function quickBookSpace(spaceId) {
@@ -552,24 +588,6 @@
 
     function closeTenantDrawer() {
       document.getElementById("tenantDrawer").classList.add("hidden");
-    }
-
-    async function triggerSync() {
-      const notice = document.getElementById("syncNotice");
-      notice.classList.remove("hidden");
-      const res = await DataStore.syncWithSheets();
-      notice.classList.add("hidden");
-      alert(res.message);
-      if (res.success) renderApp();
-    }
-
-    function importData(event) {
-      const file = event.target.files[0];
-      if (!file) return;
-      DataStore.importJSON(file, (success, msg) => {
-        alert(msg);
-        if (success) renderApp();
-      });
     }
   </script>
 </body>
