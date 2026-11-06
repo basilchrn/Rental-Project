@@ -3,195 +3,185 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>Rental Hub | Space & Day Slot Manager</title>
+  <title>Rental Manager | Space & Day Slot Hub</title>
   <link rel="stylesheet" href="style.css">
-  <style>
-    /* Prevent iOS auto-zoom on inputs */
-    @media screen and (max-width: 768px) {
-      input, select, textarea { font-size: 16px !important; }
-    }
-    .safe-top { padding-top: max(1rem, env(safe-area-inset-top)); }
-    .safe-bottom { padding-bottom: max(1.25rem, env(safe-area-inset-bottom)); }
-  </style>
 </head>
-<body class="bg-slate-100 text-slate-800 antialiased min-h-screen pb-24 md:pb-8">
+<body>
 
-  <!-- CONFIGURATION -->
-  <script>
-    // PASTE YOUR DEPLOYED GOOGLE APPS SCRIPT WEB APP URL HERE:
-    const API_URL = "https://script.google.com/macros/s/AKfycbylpeucXe9la6adHK01Mgewjv46hCQOTQyROjYU8yvV2tWCAfyJ7ePiVp1zVZX1IKKx/exec";
-  </script>
-
-  <!-- TOP HEADER -->
-  <header class="bg-indigo-900 text-white safe-top px-4 py-4 shadow-md sticky top-0 z-30">
-    <div class="max-w-6xl mx-auto flex items-center justify-between">
+  <!-- HEADER -->
+  <header>
+    <div class="max-w-6xl header-inner">
       <div>
-        <h1 class="text-xl font-bold tracking-tight">Premises Rental Hub</h1>
-        <p class="text-xs text-indigo-200">Day & Multi-Day Slot Reservations</p>
+        <h1>Premises Day Rental Hub</h1>
+        <p>Single & Combined Day Slot Manager</p>
       </div>
-      <div class="flex gap-2">
-        <button onclick="refreshData()" class="bg-indigo-800 hover:bg-indigo-700 text-xs px-3 py-2 rounded-lg border border-indigo-600 transition flex items-center gap-1">
-          <span id="syncIcon">🔄</span> Sync
+      <div class="header-actions">
+        <button type="button" onclick="triggerSync()" class="btn btn-outline" id="syncBtn">
+          Sync Sheets
         </button>
-        <button onclick="openBookingModal()" class="bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold text-xs px-3 py-2 rounded-lg shadow transition">
+        <button type="button" onclick="DataStore.exportJSON()" class="btn btn-secondary">
+          Export Backup
+        </button>
+        <button type="button" onclick="openBookingModal()" class="btn btn-amber">
           + New Booking
         </button>
       </div>
     </div>
   </header>
 
-  <!-- METRIC KPI CARDS -->
-  <main class="max-w-6xl mx-auto p-4 space-y-6">
-    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-      <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-        <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Spaces</span>
-        <p id="statTotal" class="text-2xl font-bold text-slate-800">4</p>
+  <!-- MAIN BODY -->
+  <main class="max-w-6xl">
+    
+    <!-- KPI METRICS -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="label">Total Units</div>
+        <div id="statTotal" class="value">4</div>
       </div>
-      <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-        <span class="text-xs font-semibold text-emerald-600 uppercase tracking-wider">Available</span>
-        <p id="statAvailable" class="text-2xl font-bold text-emerald-600">--</p>
+      <div class="stat-card">
+        <div class="label">Available</div>
+        <div id="statAvailable" class="value text-emerald">--</div>
       </div>
-      <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-        <span class="text-xs font-semibold text-rose-500 uppercase tracking-wider">Occupied</span>
-        <p id="statBooked" class="text-2xl font-bold text-rose-600">--</p>
+      <div class="stat-card">
+        <div class="label">Occupied</div>
+        <div id="statBooked" class="value text-rose">--</div>
       </div>
-      <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-        <span class="text-xs font-semibold text-amber-600 uppercase tracking-wider">Pending Due</span>
-        <p id="statPending" class="text-2xl font-bold text-amber-600">₹0</p>
+      <div class="stat-card">
+        <div class="label">Pending Balance</div>
+        <div id="statPending" class="value text-amber">₹0</div>
       </div>
     </div>
 
     <!-- SPACES GRID -->
-    <div>
-      <div class="flex items-center justify-between mb-3">
-        <h2 class="text-base font-bold text-slate-800">Premises Units</h2>
-        <span id="loadingNotice" class="text-xs text-indigo-600 hidden animate-pulse font-medium">Syncing with Google Sheets...</span>
+    <section>
+      <div class="section-header">
+        <h2>Premises Spaces & Slots</h2>
+        <span id="syncNotice" class="hidden text-amber" style="font-size:0.75rem; font-weight:700;">Syncing...</span>
       </div>
-      <div id="spacesGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <!-- Rendered via JS -->
+      <div id="spacesGrid" class="spaces-grid">
+        <!-- Rendered via renderApp() -->
       </div>
-    </div>
+    </section>
 
-    <!-- RECENT BOOKINGS / ACTIVE LEDGER -->
-    <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
-      <h2 class="text-base font-bold text-slate-800 mb-3">Active Bookings & Payments</h2>
-      <div class="overflow-x-auto">
-        <table class="w-full text-left text-xs text-slate-600">
-          <thead class="bg-slate-50 text-slate-400 uppercase font-semibold border-b">
+    <!-- ACTIVE BOOKINGS / TRANSACTIONS TABLE -->
+    <section class="table-card">
+      <div class="section-header">
+        <h2>Active Bookings & Payments</h2>
+        <label class="btn btn-outline" style="color:var(--slate-700); border-color:var(--slate-300);">
+          Import Backup <input type="file" accept=".json" onchange="importData(event)" style="display:none;">
+        </label>
+      </div>
+      <div class="table-responsive">
+        <table>
+          <thead>
             <tr>
-              <th class="py-2 px-3">Unit</th>
-              <th class="py-2 px-3">Tenant</th>
-              <th class="py-2 px-3">Dates</th>
-              <th class="py-2 px-3">Net Rent</th>
-              <th class="py-2 px-3">Advance</th>
-              <th class="py-2 px-3">Balance</th>
-              <th class="py-2 px-3 text-right">Action</th>
+              <th>Space</th>
+              <th>Tenant</th>
+              <th>Dates</th>
+              <th>Net Rent</th>
+              <th>Advance</th>
+              <th>Balance</th>
+              <th style="text-align: right;">Action</th>
             </tr>
           </thead>
-          <tbody id="bookingsTableBody" class="divide-y divide-slate-100 font-medium">
-            <!-- Rendered via JS -->
+          <tbody id="bookingsTableBody">
+            <!-- Rendered via renderApp() -->
           </tbody>
         </table>
       </div>
-    </div>
+    </section>
   </main>
 
   <!-- MODAL: NEW BOOKING & TENANT REGISTRATION -->
-  <div id="bookingModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-end md:items-center justify-center p-0 md:p-4">
-    <div class="bg-white w-full max-w-xl max-h-[92vh] rounded-t-2xl md:rounded-2xl shadow-2xl flex flex-col overflow-hidden">
-      
-      <div class="p-4 bg-indigo-900 text-white flex justify-between items-center">
+  <div id="bookingModal" class="modal-overlay hidden">
+    <div class="modal-content">
+      <div class="modal-header">
         <div>
-          <h3 class="font-bold text-base">New Slot Reservation</h3>
-          <p class="text-xs text-indigo-200">Register tenant & calculate rates</p>
+          <h3>New Slot Booking</h3>
+          <p style="font-size:0.7rem; color:var(--slate-300);">Register tenant, set F&F discount & capture ID</p>
         </div>
-        <button onclick="closeBookingModal()" class="text-indigo-200 hover:text-white text-2xl font-bold leading-none">&times;</button>
+        <button type="button" class="modal-close" onclick="closeBookingModal()">&times;</button>
       </div>
 
-      <form id="bookingForm" onsubmit="submitNewBooking(event)" class="overflow-y-auto p-4 space-y-4 text-xs">
+      <form id="bookingForm" onsubmit="submitNewBooking(event)" class="modal-body">
         
-        <!-- Space & Date Selection -->
-        <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-3">
-          <span class="font-bold text-slate-700 block">1. Space & Slot Details</span>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <!-- Slot & Space -->
+        <div class="form-group-card">
+          <strong style="color:var(--slate-700);">1. Space & Slot Reservation</strong>
+          <div class="grid-2">
             <div>
-              <label class="block text-slate-500 mb-1">Select Space</label>
-              <select id="modalSpaceSelect" onchange="calculatePricing()" class="w-full border rounded-lg p-2 bg-white" required></select>
+              <label for="modalSpaceSelect">Rental Space</label>
+              <select id="modalSpaceSelect" onchange="calculatePricing()" required></select>
             </div>
             <div>
-              <label class="block text-slate-500 mb-1">Rental Type</label>
-              <select id="modalSlotType" onchange="calculatePricing()" class="w-full border rounded-lg p-2 bg-white">
+              <label for="modalSlotType">Slot Type</label>
+              <select id="modalSlotType" onchange="calculatePricing()">
                 <option value="SingleDay">Single Full Day</option>
                 <option value="CombinedDays">Combined Multi-Day</option>
-                <option value="HalfDay">Half Day / Slot</option>
+                <option value="HalfDay">Half Day Slot</option>
               </select>
             </div>
           </div>
-          <div class="grid grid-cols-2 gap-3">
+          <div class="grid-2">
             <div>
-              <label class="block text-slate-500 mb-1">Start Date</label>
-              <input type="date" id="modalStartDate" onchange="calculatePricing()" class="w-full border rounded-lg p-2 bg-white" required>
+              <label for="modalStartDate">Start Date</label>
+              <input type="date" id="modalStartDate" onchange="calculatePricing()" required>
             </div>
             <div>
-              <label class="block text-slate-500 mb-1">End Date</label>
-              <input type="date" id="modalEndDate" onchange="calculatePricing()" class="w-full border rounded-lg p-2 bg-white" required>
+              <label for="modalEndDate">End Date</label>
+              <input type="date" id="modalEndDate" onchange="calculatePricing()" required>
             </div>
           </div>
         </div>
 
-        <!-- Tenant Demographics & ID Proof -->
-        <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-3">
-          <span class="font-bold text-slate-700 block">2. Tenant Information (Mandatory)</span>
+        <!-- Tenant Information & ID Proof -->
+        <div class="form-group-card">
+          <strong style="color:var(--slate-700);">2. Tenant Profile (Mandatory ID)</strong>
           <div>
-            <label class="block text-slate-500 mb-1">Full Name</label>
-            <input type="text" id="tName" placeholder="e.g., Rajesh Kumar" class="w-full border rounded-lg p-2 bg-white" required>
+            <label for="tName">Full Name</label>
+            <input type="text" id="tName" placeholder="e.g., Rajesh Kumar" required>
           </div>
-          <div class="grid grid-cols-3 gap-2">
+          <div class="grid-3">
             <div>
-              <label class="block text-slate-500 mb-1">Age</label>
-              <input type="number" id="tAge" min="18" placeholder="28" class="w-full border rounded-lg p-2 bg-white" required>
+              <label for="tAge">Age</label>
+              <input type="number" id="tAge" min="18" placeholder="28" required>
             </div>
             <div>
-              <label class="block text-slate-500 mb-1">Gender</label>
-              <select id="tGender" class="w-full border rounded-lg p-2 bg-white">
+              <label for="tGender">Gender</label>
+              <select id="tGender">
                 <option value="Male">Male</option>
                 <option value="Female">Female</option>
                 <option value="Other">Other</option>
               </select>
             </div>
             <div>
-              <label class="block text-slate-500 mb-1">Phone Number</label>
-              <input type="tel" id="tPhone" placeholder="10 digits" class="w-full border rounded-lg p-2 bg-white" required>
+              <label for="tPhone">Phone</label>
+              <input type="tel" id="tPhone" placeholder="10 digits" required>
             </div>
           </div>
 
-          <!-- Mandatory ID Proof File/Camera -->
-          <div class="border-2 border-dashed border-slate-300 rounded-xl p-3 bg-white text-center">
-            <label class="block font-semibold text-slate-700 mb-1">Mandatory ID Proof Photo</label>
-            <p class="text-[11px] text-slate-400 mb-2">Snap a camera photo or upload Aadhaar/Govt ID</p>
-            
-            <div class="flex flex-wrap gap-2 justify-center items-center">
-              <input type="file" id="idProofInput" accept="image/*" capture="environment" onchange="handleIdFile(event)" class="text-xs text-slate-500 file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:bg-indigo-50 file:text-indigo-700">
-              <button type="button" onclick="generateMockId()" class="text-xs bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded text-slate-600 border">
-                Use Test ID Card
-              </button>
+          <!-- Mandatory ID Upload -->
+          <div class="upload-dropzone">
+            <label style="font-weight:700; color:var(--slate-700);">Mandatory Tenant ID Photo</label>
+            <p style="font-size:0.65rem; color:var(--slate-400); margin-bottom:0.4rem;">
+              Capture from camera or select Govt ID proof
+            </p>
+            <div style="display:flex; justify-content:center; gap:0.5rem; flex-wrap:wrap; align-items:center;">
+              <input type="file" id="idProofInput" accept="image/*" capture="environment" onchange="handleIdUpload(event)">
+              <button type="button" class="btn btn-secondary" onclick="generateSampleId()">Use Test ID</button>
             </div>
-            
-            <div id="idPreviewBox" class="mt-2 hidden">
-              <img id="idImageTag" src="" class="h-24 mx-auto rounded border shadow-sm object-cover">
-              <span class="text-[10px] text-emerald-600 font-semibold block mt-1">✓ ID Proof Loaded</span>
-            </div>
+            <img id="idImageTag" src="" alt="ID Preview" class="id-preview-img hidden">
             <input type="hidden" id="idProofBase64" required>
           </div>
         </div>
 
-        <!-- F&F Discount & Payment Engine -->
-        <div class="bg-indigo-50/60 p-3 rounded-xl border border-indigo-100 space-y-3">
-          <span class="font-bold text-indigo-900 block">3. Rates & Discount Engine</span>
-          <div class="grid grid-cols-2 gap-3">
+        <!-- Rates & F&F Discounts -->
+        <div class="form-group-card accent">
+          <strong style="color:var(--primary);">3. Rates & Friends / Family (F&F) Discount</strong>
+          <div class="grid-2">
             <div>
-              <label class="block text-slate-500 mb-1">Pricing / F&F Tier</label>
-              <select id="modalDiscount" onchange="calculatePricing()" class="w-full border rounded-lg p-2 bg-white font-medium">
+              <label for="modalDiscount">Pricing Tier</label>
+              <select id="modalDiscount" onchange="calculatePricing()">
                 <option value="0">Standard (0% Off)</option>
                 <option value="0.20">Friends & Family (20% Off)</option>
                 <option value="0.35">Special F&F (35% Off)</option>
@@ -199,101 +189,69 @@
               </select>
             </div>
             <div>
-              <label class="block text-slate-500 mb-1">Advance Collected (₹)</label>
-              <input type="number" id="modalAdvance" oninput="calculatePricing()" placeholder="0" class="w-full border rounded-lg p-2 bg-white font-semibold text-emerald-700" required>
+              <label for="modalAdvance">Advance Received (₹)</label>
+              <input type="number" id="modalAdvance" oninput="calculatePricing()" required>
             </div>
           </div>
 
-          <!-- Dynamic Ledger Preview -->
-          <div class="text-[11px] bg-white p-2.5 rounded-lg border border-indigo-100 space-y-1">
-            <div class="flex justify-between"><span>Base Rent (<span id="calcDays">1</span> day(s)):</span><span id="calcBase" class="font-semibold">₹0</span></div>
-            <div class="flex justify-between text-rose-600"><span>F&F Discount:</span><span id="calcDisc">-₹0</span></div>
-            <div class="flex justify-between"><span>Caution Deposit:</span><span id="calcDeposit" class="font-semibold">₹0</span></div>
-            <div class="flex justify-between border-t pt-1 font-bold text-slate-800"><span>Total Payable:</span><span id="calcTotal">₹0</span></div>
-            <div class="flex justify-between font-bold text-amber-600"><span>Balance Pending:</span><span id="calcBalance">₹0</span></div>
+          <div class="ledger-summary-box">
+            <div class="ledger-row"><span>Base Rent (<span id="calcDays">1</span> day(s)):</span><b id="calcBase">₹0</b></div>
+            <div class="ledger-row" style="color:var(--rose);"><span>F&F Discount:</span><span id="calcDisc">-₹0</span></div>
+            <div class="ledger-row"><span>Caution Deposit:</span><b id="calcDeposit">₹0</b></div>
+            <div class="ledger-row total"><span>Total Payable:</span><span id="calcTotal">₹0</span></div>
+            <div class="ledger-row" style="color:var(--amber); font-weight:800;"><span>Remaining Balance:</span><span id="calcBalance">₹0</span></div>
           </div>
         </div>
 
-        <button type="submit" id="saveBookingBtn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl shadow transition">
+        <button type="submit" id="saveBookingBtn" class="btn btn-emerald">
           Confirm & Save Booking
         </button>
       </form>
     </div>
   </div>
 
-  <!-- DRAWER: TENANT INFO SHEET & BALANCE SETTLEMENT -->
-  <div id="tenantDrawer" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex justify-end">
-    <div class="bg-white w-full max-w-md h-full shadow-2xl flex flex-col p-5 overflow-y-auto safe-top safe-bottom">
-      <div class="flex justify-between items-center pb-3 border-b">
-        <h3 class="font-bold text-base text-slate-800">Tenant Info Sheet</h3>
-        <button onclick="closeTenantDrawer()" class="text-slate-400 hover:text-slate-700 text-xl font-bold">&times;</button>
+  <!-- DRAWER: TENANT INSPECTOR & SETTLEMENT -->
+  <div id="tenantDrawer" class="drawer-overlay hidden">
+    <div class="drawer-panel">
+      <div class="drawer-header">
+        <h3 style="font-weight:700;">Tenant Info Sheet</h3>
+        <button type="button" class="btn btn-outline" style="color:var(--slate-800); border-color:var(--slate-300);" onclick="closeTenantDrawer()">&times;</button>
       </div>
-
-      <div id="drawerContent" class="py-4 space-y-4 text-xs">
-        <!-- Rendered dynamically -->
+      <div id="drawerContent" class="drawer-body">
+        <!-- Rendered via openTenantDrawer() -->
       </div>
     </div>
   </div>
 
-  <!-- APPLICATION LOGIC -->
+  <!-- APPLICATION SCRIPT -->
+  <script src="data-sync.js"></script>
   <script>
-    // In-memory state
-    let DB = {
-      spaces: [
-        { space_id: "SP-01", name: "North Hall (Capacity: 100)", full_day_rate: 8000, half_day_rate: 4500, default_deposit: 2000, allowed_options: "FullDay, CombinedDays", status: "Available" },
-        { space_id: "SP-02", name: "Studio A (A/C, Soundproof)", full_day_rate: 5000, half_day_rate: 3000, default_deposit: 1500, allowed_options: "FullDay, HalfDay", status: "Available" },
-        { space_id: "SP-03", name: "Rooftop Open Terrace", full_day_rate: 6000, half_day_rate: 3500, default_deposit: 2000, allowed_options: "FullDay, CombinedDays", status: "Available" },
-        { space_id: "SP-04", name: "Conference Suite B", full_day_rate: 3500, half_day_rate: 2000, default_deposit: 1000, allowed_options: "FullDay, HalfDay", status: "Available" }
-      ],
-      bookings: [],
-      tenants: []
-    };
-
-    // Initialize application
+    // Initialize App
     window.addEventListener("DOMContentLoaded", () => {
-      // Set default dates in form to today
       const today = new Date().toISOString().split("T")[0];
       document.getElementById("modalStartDate").value = today;
       document.getElementById("modalEndDate").value = today;
-      
-      populateSpaceOptions();
-      renderDashboard();
-      
-      if (API_URL && API_URL !== "https://script.google.com/macros/s/AKfycbylpeucXe9la6adHK01Mgewjv46hCQOTQyROjYU8yvV2tWCAfyJ7ePiVp1zVZX1IKKx/exec") {
-        refreshData();
-      }
+      populateSpaceSelect();
+      renderApp();
     });
 
-    async function refreshData() {
-      if (!API_URL || API_URL === "https://script.google.com/macros/s/AKfycbylpeucXe9la6adHK01Mgewjv46hCQOTQyROjYU8yvV2tWCAfyJ7ePiVp1zVZX1IKKx/exec") {
-        alert("Please set your deployed Google Apps Script URL in index.html to sync live data.");
-        return;
-      }
-      document.getElementById("loadingNotice").classList.remove("hidden");
-      try {
-        const res = await fetch(API_URL);
-        const json = await res.json();
-        if (json.status === "success" && json.data) {
-          if (json.data.spaces && json.data.spaces.length) DB.spaces = json.data.spaces;
-          DB.bookings = json.data.bookings || [];
-          DB.tenants = json.data.tenants || [];
-          renderDashboard();
-        }
-      } catch (err) {
-        console.error("Fetch error:", err);
-      } finally {
-        document.getElementById("loadingNotice").classList.add("hidden");
-      }
+    function populateSpaceSelect() {
+      const db = DataStore.get();
+      const select = document.getElementById("modalSpaceSelect");
+      select.innerHTML = db.spaces.map(s => `<option value="${s.space_id}">${s.name} (₹${s.full_day_rate}/day)</option>`).join("");
+      calculatePricing();
     }
 
-    function renderDashboard() {
-      // 1. Stats calculation
-      const total = DB.spaces.length;
-      const booked = DB.spaces.filter(s => s.status === "Booked").length;
+    function renderApp() {
+      const db = DataStore.get();
+
+      // 1. Calculate Stats
+      const total = db.spaces.length;
+      const booked = db.spaces.filter(s => s.status === "Booked").length;
       const available = total - booked;
-      
       let pendingBalance = 0;
-      DB.bookings.forEach(b => {
+
+      db.bookings.forEach(b => {
         if (b.balance_status === "Pending") {
           pendingBalance += (Number(b.net_rent) + Number(b.caution_deposit) - Number(b.advance_paid) - Number(b.balance_paid || 0));
         }
@@ -306,41 +264,40 @@
 
       // 2. Render Spaces Grid
       const grid = document.getElementById("spacesGrid");
-      grid.innerHTML = DB.spaces.map(s => {
+      grid.innerHTML = db.spaces.map(s => {
         const isBooked = s.status === "Booked";
-        const currentBooking = DB.bookings.find(b => b.space_id === s.space_id && b.balance_status !== "Completed");
-        const tenant = currentBooking ? DB.tenants.find(t => t.booking_id === currentBooking.booking_id) : null;
+        const currentBooking = db.bookings.find(b => b.space_id === s.space_id && b.balance_status !== "Completed");
+        const tenant = currentBooking ? db.tenants.find(t => t.booking_id === currentBooking.booking_id) : null;
 
         return `
-          <div class="bg-white rounded-2xl border ${isBooked ? 'border-rose-200' : 'border-slate-200'} p-4 shadow-sm flex flex-col justify-between">
+          <div class="space-card ${isBooked ? 'is-booked' : ''}">
             <div>
-              <div class="flex justify-between items-start mb-2">
-                <span class="text-xs font-bold text-slate-400">${s.space_id}</span>
-                <span class="px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                  s.status === 'Available' ? 'bg-emerald-100 text-emerald-800' :
-                  s.status === 'Booked' ? 'bg-rose-100 text-rose-800' : 'bg-slate-100 text-slate-800'
-                }">${s.status}</span>
+              <div class="space-card-top">
+                <span style="font-size:0.7rem; font-weight:700; color:var(--slate-400);">${s.space_id}</span>
+                <span class="badge ${s.status === 'Available' ? 'badge-available' : 'badge-booked'}">${s.status}</span>
               </div>
-              <h3 class="font-bold text-slate-800 text-sm mb-1">${s.name}</h3>
-              <p class="text-slate-500 text-xs mb-3">Rate: <b>₹${s.full_day_rate}</b>/day | Deposit: ₹${s.default_deposit}</p>
+              <h3>${s.name}</h3>
+              <p class="rate-info">Daily: <b>₹${s.full_day_rate}</b> | Deposit: ₹${s.default_deposit}</p>
               
               ${isBooked && tenant ? `
-                <div class="bg-rose-50/70 p-2.5 rounded-xl border border-rose-100 text-xs text-rose-900 mb-3">
-                  <div class="font-bold">${tenant.full_name} (${tenant.phone_number})</div>
-                  <div class="text-[11px] text-rose-700">Dates: ${currentBooking.start_date} to ${currentBooking.end_date}</div>
+                <div class="active-tenant-box">
+                  <strong>${tenant.full_name} (${tenant.phone_number})</strong>
+                  <div style="font-size:0.68rem; margin-top:2px;">Dates: ${currentBooking.start_date} → ${currentBooking.end_date}</div>
                 </div>
               ` : `
-                <div class="text-[11px] text-slate-400 mb-3 italic">Options: ${s.allowed_options}</div>
+                <p style="font-size:0.7rem; color:var(--slate-400); font-style:italic; margin-bottom:0.75rem;">
+                  Options: ${s.allowed_options}
+                </p>
               `}
             </div>
 
-            <div class="pt-2 border-t flex gap-2">
+            <div class="space-card-footer">
               ${isBooked && currentBooking ? `
-                <button onclick="openTenantDrawer('${currentBooking.booking_id}')" class="flex-1 bg-slate-900 hover:bg-slate-800 text-white font-semibold py-2 rounded-lg text-xs">
+                <button type="button" class="btn btn-secondary" onclick="openTenantDrawer('${currentBooking.booking_id}')">
                   Inspect Tenant & Settle
                 </button>
               ` : `
-                <button onclick="quickBookSpace('${s.space_id}')" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 rounded-lg text-xs">
+                <button type="button" class="btn btn-primary" onclick="quickBookSpace('${s.space_id}')">
                   Book Slot
                 </button>
               `}
@@ -351,24 +308,26 @@
 
       // 3. Render Bookings Table
       const tBody = document.getElementById("bookingsTableBody");
-      if (DB.bookings.length === 0) {
-        tBody.innerHTML = `<tr><td colspan="7" class="py-4 text-center text-slate-400">No active bookings found.</td></tr>`;
+      if (db.bookings.length === 0) {
+        tBody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:1.5rem; color:var(--slate-400);">No reservations recorded yet.</td></tr>`;
       } else {
-        tBody.innerHTML = DB.bookings.map(b => {
-          const space = DB.spaces.find(s => s.space_id === b.space_id);
-          const tenant = DB.tenants.find(t => t.booking_id === b.booking_id);
+        tBody.innerHTML = db.bookings.map(b => {
+          const space = db.spaces.find(s => s.space_id === b.space_id);
+          const tenant = db.tenants.find(t => t.booking_id === b.booking_id);
           const balance = (Number(b.net_rent) + Number(b.caution_deposit) - Number(b.advance_paid) - Number(b.balance_paid || 0));
 
           return `
-            <tr class="hover:bg-slate-50">
-              <td class="py-2.5 px-3 font-semibold text-slate-800">${space ? space.name : b.space_id}</td>
-              <td class="py-2.5 px-3">${tenant ? tenant.full_name : 'N/A'}</td>
-              <td class="py-2.5 px-3 text-[11px]">${b.start_date} → ${b.end_date}</td>
-              <td class="py-2.5 px-3 font-bold">₹${b.net_rent}</td>
-              <td class="py-2.5 px-3 text-emerald-600">₹${b.advance_paid}</td>
-              <td class="py-2.5 px-3 ${balance > 0 ? 'text-amber-600 font-bold' : 'text-slate-400'}">₹${balance}</td>
-              <td class="py-2.5 px-3 text-right">
-                <button onclick="openTenantDrawer('${b.booking_id}')" class="text-indigo-600 hover:underline">View</button>
+            <tr>
+              <td style="font-weight:700;">${space ? space.name : b.space_id}</td>
+              <td>${tenant ? tenant.full_name : 'N/A'}</td>
+              <td style="font-size:0.7rem;">${b.start_date} → ${b.end_date}</td>
+              <td style="font-weight:700;">₹${b.net_rent}</td>
+              <td style="color:var(--emerald); font-weight:700;">₹${b.advance_paid}</td>
+              <td style="color:${balance > 0 ? 'var(--amber)' : 'var(--slate-400)'}; font-weight:800;">₹${balance}</td>
+              <td style="text-align:right;">
+                <button type="button" class="btn btn-outline" style="color:var(--primary-accent); border:none; padding:0;" onclick="openTenantDrawer('${b.booking_id}')">
+                  View
+                </button>
               </td>
             </tr>
           `;
@@ -376,21 +335,16 @@
       }
     }
 
-    function populateSpaceOptions() {
-      const select = document.getElementById("modalSpaceSelect");
-      select.innerHTML = DB.spaces.map(s => `<option value="${s.space_id}">${s.name} (₹${s.full_day_rate}/day)</option>`).join("");
-      calculatePricing();
-    }
-
     function calculatePricing() {
+      const db = DataStore.get();
       const spaceId = document.getElementById("modalSpaceSelect").value;
-      const space = DB.spaces.find(s => s.space_id === spaceId);
+      const space = db.spaces.find(s => s.space_id === spaceId);
       if (!space) return;
 
       const slotType = document.getElementById("modalSlotType").value;
       const start = new Date(document.getElementById("modalStartDate").value);
       const end = new Date(document.getElementById("modalEndDate").value);
-      
+
       let days = Math.max(1, Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1);
       if (slotType === "HalfDay") days = 0.5;
 
@@ -402,7 +356,7 @@
       const totalPayable = netRent + deposit;
 
       const advanceInput = document.getElementById("modalAdvance");
-      if (!advanceInput.value) advanceInput.value = Math.round(totalPayable * 0.3); // suggest 30% advance
+      if (!advanceInput.value) advanceInput.value = Math.round(totalPayable * 0.3); // 30% default suggestion
       const advancePaid = parseFloat(advanceInput.value) || 0;
       const balance = Math.max(0, totalPayable - advancePaid);
 
@@ -414,53 +368,50 @@
       document.getElementById("calcBalance").innerText = `₹${balance}`;
     }
 
-    // Handle ID Upload and Base64 conversion
-    function handleIdFile(e) {
-      const file = e.target.files[0];
+    function handleIdUpload(event) {
+      const file = event.target.files[0];
       if (!file) return;
       const reader = new FileReader();
-      reader.onload = function(event) {
-        document.getElementById("idProofBase64").value = event.target.result;
-        document.getElementById("idImageTag").src = event.target.result;
-        document.getElementById("idPreviewBox").classList.remove("hidden");
+      reader.onload = function(e) {
+        document.getElementById("idProofBase64").value = e.target.result;
+        const img = document.getElementById("idImageTag");
+        img.src = e.target.result;
+        img.classList.remove("hidden");
       };
       reader.readAsDataURL(file);
     }
 
-    // Mock Sample ID generator for instant testing
-    function generateMockId() {
+    function generateSampleId() {
       const canvas = document.createElement("canvas");
       canvas.width = 300; canvas.height = 180;
       const ctx = canvas.getContext("2d");
       ctx.fillStyle = "#f8fafc"; ctx.fillRect(0, 0, 300, 180);
-      ctx.fillStyle = "#0f172a"; ctx.font = "bold 14px sans-serif";
-      ctx.fillText("GOVERNMENT IDENTITY PROOF", 25, 30);
+      ctx.fillStyle = "#0f172a"; ctx.font = "bold 13px sans-serif";
+      ctx.fillText("GOVERNMENT ID PROOF", 25, 30);
       ctx.fillStyle = "#475569"; ctx.font = "11px sans-serif";
-      ctx.fillText("Name: Demo Verified Citizen", 25, 60);
+      ctx.fillText("Name: Demo Verified Tenant", 25, 60);
       ctx.fillText("DOB: 18/04/1994   Gender: M", 25, 80);
       ctx.fillText("ID No: 5489-3210-9941", 25, 100);
-      ctx.fillStyle = "#0284c7"; ctx.fillRect(25, 120, 80, 40);
+      ctx.fillStyle = "#4338ca"; ctx.fillRect(25, 120, 80, 40);
       ctx.fillStyle = "#ffffff"; ctx.font = "bold 10px sans-serif";
       ctx.fillText("OFFICIAL SEAL", 30, 145);
 
       const base64 = canvas.toDataURL("image/jpeg");
       document.getElementById("idProofBase64").value = base64;
-      document.getElementById("idImageTag").src = base64;
-      document.getElementById("idPreviewBox").classList.remove("hidden");
+      const img = document.getElementById("idImageTag");
+      img.src = base64;
+      img.classList.remove("hidden");
     }
 
-    async function submitNewBooking(e) {
-      e.preventDefault();
+    function submitNewBooking(event) {
+      event.preventDefault();
       const idBase64 = document.getElementById("idProofBase64").value;
       if (!idBase64) {
-        alert("ID Proof Photo is strictly mandatory before proceeding.");
+        alert("A tenant ID Proof photo is mandatory.");
         return;
       }
 
-      const saveBtn = document.getElementById("saveBookingBtn");
-      saveBtn.disabled = true;
-      saveBtn.innerText = "Saving to Google Sheet...";
-
+      const db = DataStore.get();
       const spaceId = document.getElementById("modalSpaceSelect").value;
       const bookingId = "BK-" + Date.now().toString().slice(-6);
 
@@ -493,121 +444,96 @@
         age: document.getElementById("tAge").value,
         gender: document.getElementById("tGender").value,
         phone_number: document.getElementById("tPhone").value,
-        id_proof_base64: idBase64
+        id_proof_url: idBase64
       };
 
-      // 1. Local update for zero lag
-      DB.bookings.unshift(bookingRecord);
-      DB.tenants.unshift({ ...tenantRecord, id_proof_url: idBase64 });
-      const spaceObj = DB.spaces.find(s => s.space_id === spaceId);
+      db.bookings.unshift(bookingRecord);
+      db.tenants.unshift(tenantRecord);
+      const spaceObj = db.spaces.find(s => s.space_id === spaceId);
       if (spaceObj) spaceObj.status = "Booked";
-      renderDashboard();
+
+      DataStore.save(db);
+      DataStore.postToSheets("create_booking", { booking: bookingRecord, tenant: tenantRecord });
+
+      renderApp();
       closeBookingModal();
-
-      // 2. Push to Google Apps Script backend if configured
-      if (API_URL && API_URL !== "https://script.google.com/macros/s/AKfycbylpeucXe9la6adHK01Mgewjv46hCQOTQyROjYU8yvV2tWCAfyJ7ePiVp1zVZX1IKKx/exec") {
-        try {
-          await fetch(API_URL, {
-            method: "POST",
-            body: JSON.stringify({
-              action: "create_booking",
-              payload: { booking: bookingRecord, tenant: tenantRecord }
-            })
-          });
-        } catch (err) {
-          console.error("Backend error:", err);
-        }
-      }
-
-      saveBtn.disabled = false;
-      saveBtn.innerText = "Confirm & Save Booking";
+      document.getElementById("bookingForm").reset();
+      document.getElementById("idProofBase64").value = "";
+      document.getElementById("idImageTag").classList.add("hidden");
     }
 
     function openTenantDrawer(bookingId) {
-      const b = DB.bookings.find(item => item.booking_id === bookingId);
-      const t = DB.tenants.find(item => item.booking_id === bookingId);
-      const s = DB.spaces.find(item => item.space_id === b.space_id);
+      const db = DataStore.get();
+      const b = db.bookings.find(i => i.booking_id === bookingId);
+      const t = db.tenants.find(i => i.booking_id === bookingId);
+      const s = db.spaces.find(i => i.space_id === b.space_id);
       if (!b || !t) return;
 
       const balance = (Number(b.net_rent) + Number(b.caution_deposit) - Number(b.advance_paid) - Number(b.balance_paid || 0));
 
       const drawer = document.getElementById("drawerContent");
       drawer.innerHTML = `
-        <div class="bg-indigo-50 p-3 rounded-xl border border-indigo-100">
-          <span class="text-indigo-900 font-bold block">${s ? s.name : b.space_id}</span>
-          <span class="text-[11px] text-indigo-700">Slot: ${b.start_date} to ${b.end_date}</span>
+        <div style="background-color:var(--slate-50); padding:0.75rem; border-radius:var(--radius-md); border:1px solid var(--slate-200);">
+          <strong style="color:var(--primary); font-size:0.85rem;">${s ? s.name : b.space_id}</strong>
+          <div style="font-size:0.7rem; color:var(--slate-500);">Dates: ${b.start_date} to ${b.end_date}</div>
         </div>
 
         <div>
-          <h4 class="font-bold text-slate-700 mb-1">Tenant Profile</h4>
-          <p class="text-sm font-semibold text-slate-800">${t.full_name} (${t.gender}, Age: ${t.age})</p>
-          <p class="text-slate-500 font-mono">${t.phone_number}</p>
+          <label>TENANT PROFILE</label>
+          <div style="font-size:0.95rem; font-weight:700;">${t.full_name} (${t.gender}, Age: ${t.age})</div>
+          <div style="font-family:monospace; color:var(--slate-600);">${t.phone_number}</div>
         </div>
 
         <div>
-          <h4 class="font-bold text-slate-700 mb-1">ID Proof Document</h4>
-          <img src="${t.id_proof_url}" class="w-full rounded-xl border border-slate-300 shadow-sm max-h-48 object-cover">
+          <label>ID PROOF (VERIFIED)</label>
+          <img src="${t.id_proof_url}" style="width:100%; border-radius:var(--radius-md); border:1px solid var(--slate-300); max-height:10rem; object-fit:cover;">
         </div>
 
-        <div class="bg-slate-50 p-3 rounded-xl border space-y-1">
-          <div class="flex justify-between"><span>Net Rent:</span><span class="font-semibold">₹${b.net_rent}</span></div>
-          <div class="flex justify-between"><span>Caution Deposit:</span><span class="font-semibold">₹${b.caution_deposit}</span></div>
-          <div class="flex justify-between text-emerald-600"><span>Advance Paid:</span><span class="font-semibold">₹${b.advance_paid}</span></div>
-          <div class="flex justify-between text-amber-600 font-bold text-xs pt-1 border-t"><span>Remaining Balance:</span><span>₹${balance}</span></div>
+        <div style="background-color:var(--slate-50); padding:0.75rem; border-radius:var(--radius-md); border:1px solid var(--slate-200); display:flex; flex-direction:column; gap:0.25rem;">
+          <div class="ledger-row"><span>Net Rent:</span><b>₹${b.net_rent}</b></div>
+          <div class="ledger-row"><span>Caution Deposit:</span><b>₹${b.caution_deposit}</b></div>
+          <div class="ledger-row" style="color:var(--emerald);"><span>Advance Paid:</span><b>₹${b.advance_paid}</b></div>
+          <div class="ledger-row total" style="color:var(--amber);"><span>Balance Remaining:</span><span>₹${balance}</span></div>
         </div>
 
         ${balance > 0 ? `
-          <button onclick="settleBalance('${b.booking_id}', ${balance})" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-xl transition">
-            Collect Balance Payment (₹${balance})
+          <button type="button" class="btn btn-emerald" onclick="settleBalance('${b.booking_id}', ${balance})">
+            Collect Balance (₹${balance})
           </button>
         ` : `
-          <div class="text-center p-2 bg-emerald-50 text-emerald-800 font-bold rounded-xl border border-emerald-200">
-            ✓ Payment Fully Cleared
+          <div style="text-align:center; padding:0.6rem; background-color:var(--emerald-bg); color:var(--emerald); font-weight:700; border-radius:var(--radius-md);">
+            ✓ Payment Fully Settled
           </div>
         `}
 
-        <button onclick="releaseUnit('${b.space_id}', '${b.booking_id}')" class="w-full bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold py-2.5 rounded-xl border border-rose-200 transition">
-          Release Unit & Mark Cleaned
+        <button type="button" class="btn btn-danger-outline" onclick="releaseUnit('${b.space_id}', '${b.booking_id}')">
+          Release Unit & Mark Available
         </button>
       `;
 
       document.getElementById("tenantDrawer").classList.remove("hidden");
     }
 
-    async function settleBalance(bookingId, amount) {
-      const b = DB.bookings.find(item => item.booking_id === bookingId);
+    function settleBalance(bookingId, amount) {
+      const db = DataStore.get();
+      const b = db.bookings.find(i => i.booking_id === bookingId);
       if (!b) return;
       b.balance_paid = amount;
       b.balance_status = "Cleared";
-      renderDashboard();
+      DataStore.save(db);
+      DataStore.postToSheets("update_payment", { booking_id: bookingId, balance_paid: amount, balance_status: "Cleared" });
+      renderApp();
       openTenantDrawer(bookingId);
-
-      if (API_URL && API_URL !== "https://script.google.com/macros/s/AKfycbylpeucXe9la6adHK01Mgewjv46hCQOTQyROjYU8yvV2tWCAfyJ7ePiVp1zVZX1IKKx/exec") {
-        fetch(API_URL, {
-          method: "POST",
-          body: JSON.stringify({
-            action: "update_payment",
-            payload: { booking_id: bookingId, balance_paid: amount, balance_status: "Cleared" }
-          })
-        });
-      }
     }
 
-    async function releaseUnit(spaceId, bookingId) {
-      const s = DB.spaces.find(item => item.space_id === spaceId);
+    function releaseUnit(spaceId, bookingId) {
+      const db = DataStore.get();
+      const s = db.spaces.find(i => i.space_id === spaceId);
       if (s) s.status = "Available";
-      renderDashboard();
+      DataStore.save(db);
+      DataStore.postToSheets("update_unit_status", { space_id: spaceId, status: "Available" });
+      renderApp();
       closeTenantDrawer();
-
-      if (API_URL && API_URL !== "https://script.google.com/macros/s/AKfycbylpeucXe9la6adHK01Mgewjv46hCQOTQyROjYU8yvV2tWCAfyJ7ePiVp1zVZX1IKKx/exec") {
-        fetch(API_URL, {
-          method: "POST",
-          body: JSON.stringify({
-            action: "update_unit_status",
-            payload: { space_id: spaceId, status: "Available" }
-          })
-        });
-      }
     }
 
     function quickBookSpace(spaceId) {
@@ -626,6 +552,24 @@
 
     function closeTenantDrawer() {
       document.getElementById("tenantDrawer").classList.add("hidden");
+    }
+
+    async function triggerSync() {
+      const notice = document.getElementById("syncNotice");
+      notice.classList.remove("hidden");
+      const res = await DataStore.syncWithSheets();
+      notice.classList.add("hidden");
+      alert(res.message);
+      if (res.success) renderApp();
+    }
+
+    function importData(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      DataStore.importJSON(file, (success, msg) => {
+        alert(msg);
+        if (success) renderApp();
+      });
     }
   </script>
 </body>
