@@ -2,7 +2,6 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <!-- viewport-fit=cover enables edge-to-edge support for iPhone notches and dynamic islands -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -90,7 +89,7 @@
     </section>
   </main>
 
-  <!-- MOBILE BOTTOM BAR (Thumb-friendly touch targets) -->
+  <!-- MOBILE BOTTOM BAR -->
   <nav class="mobile-bottom-bar">
     <button type="button" onclick="scrollToSection('spacesSection')" class="active">
       <span class="icon">🏢</span>
@@ -110,7 +109,7 @@
     </button>
   </nav>
 
-  <!-- MODAL: NEW BOOKING (Native Bottom Sheet on Mobile) -->
+  <!-- MODAL: NEW BOOKING -->
   <div id="bookingModal" class="modal-overlay hidden">
     <div class="modal-content">
       <div class="sheet-handle"></div>
@@ -179,11 +178,11 @@
             </div>
           </div>
 
-          <!-- Direct Mobile Camera Trigger -->
+          <!-- Camera / File Trigger -->
           <div class="upload-dropzone">
             <label style="font-weight:700; color:var(--slate-700);">Tenant ID Proof (Camera / File)</label>
             <p style="font-size:0.65rem; color:var(--slate-400); margin-bottom:0.4rem;">
-              Tap below to open your camera and capture the physical ID card
+              Capture with camera or upload official ID
             </p>
             <div style="display:flex; justify-content:center; gap:0.5rem; flex-wrap:wrap; align-items:center;">
               <input type="file" id="idProofInput" accept="image/*" capture="environment" onchange="handleIdUpload(event)">
@@ -193,9 +192,22 @@
           </div>
         </div>
 
-        <!-- Rates & F&F Discounts -->
+        <!-- Rates, Caution Deposit Toggle & F&F Discounts -->
         <div class="form-group-card accent">
-          <strong style="color:var(--primary);">3. Rates & F&F Discount</strong>
+          <strong style="color:var(--primary);">3. Rates & Deposit Settings</strong>
+          
+          <!-- Caution Deposit Toggle Switch -->
+          <div class="toggle-wrapper">
+            <div>
+              <span style="font-size:0.75rem; font-weight:700; color:var(--slate-800); display:block;">Include Caution Deposit</span>
+              <span id="depositToggleLabel" style="font-size:0.65rem; color:var(--slate-500);">Standard refundable deposit</span>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="cautionDepositToggle" onchange="calculatePricing()" checked>
+              <span class="slider"></span>
+            </label>
+          </div>
+
           <div class="grid-2">
             <div>
               <label for="modalDiscount">Pricing Tier</label>
@@ -228,7 +240,7 @@
     </div>
   </div>
 
-  <!-- DRAWER: TENANT INSPECTOR (Native Bottom Sheet on Mobile) -->
+  <!-- DRAWER: TENANT INSPECTOR -->
   <div id="tenantDrawer" class="drawer-overlay hidden">
     <div class="drawer-panel">
       <div class="sheet-handle"></div>
@@ -360,7 +372,7 @@
                 <span class="badge ${isBooked ? 'badge-booked' : 'badge-available'}">${s.status || 'Available'}</span>
               </div>
               <h3>${s.name}</h3>
-              <p class="rate-info">Daily: <b>₹${s.full_day_rate}</b> | Deposit: ₹${s.default_deposit}</p>
+              <p class="rate-info">Daily: <b>₹${s.full_day_rate}</b> | Default Deposit: ₹${s.default_deposit}</p>
               
               ${isBooked && tenant ? `
                 <div class="active-tenant-box">
@@ -418,6 +430,7 @@
       }
     }
 
+    // Dynamic Pricing Engine with Deposit Toggle
     function calculatePricing() {
       const spaceId = document.getElementById("modalSpaceSelect").value;
       const space = currentDB.spaces.find(s => s.space_id === spaceId);
@@ -434,7 +447,22 @@
       const discountPct = parseFloat(document.getElementById("modalDiscount").value) || 0;
       const discountAmt = Math.round(baseRate * discountPct);
       const netRent = baseRate - discountAmt;
-      const deposit = Number(space.default_deposit || 0);
+
+      // Handle Caution Deposit Toggle
+      const isDepositIncluded = document.getElementById("cautionDepositToggle").checked;
+      const depositLabel = document.getElementById("depositToggleLabel");
+      let deposit = 0;
+
+      if (isDepositIncluded) {
+        deposit = Number(space.default_deposit || 0);
+        depositLabel.innerText = `Standard deposit: ₹${deposit}`;
+        depositLabel.style.color = "var(--slate-500)";
+      } else {
+        deposit = 0;
+        depositLabel.innerText = "Deposit waived (₹0)";
+        depositLabel.style.color = "var(--emerald)";
+      }
+
       const totalPayable = netRent + deposit;
 
       const advanceInput = document.getElementById("modalAdvance");
@@ -450,7 +478,6 @@
       document.getElementById("calcBalance").innerText = `₹${balance}`;
     }
 
-    // Direct Image / Camera Handler
     function handleIdUpload(event) {
       const file = event.target.files[0];
       if (!file) return;
@@ -484,6 +511,7 @@
       const deposit = parseInt(document.getElementById("calcDeposit").innerText.replace("₹", ""));
       const advance = parseFloat(document.getElementById("modalAdvance").value) || 0;
       const netRent = baseAmount - discountAmt;
+      const isDepositIncluded = document.getElementById("cautionDepositToggle").checked;
 
       const bookingRecord = {
         booking_id: bookingId,
@@ -496,10 +524,11 @@
         discount_amount: discountAmt,
         net_rent: netRent,
         caution_deposit: deposit,
+        deposit_included: isDepositIncluded,
         advance_paid: advance,
         balance_paid: 0,
         balance_status: (netRent + deposit - advance) <= 0 ? "Cleared" : "Pending",
-        deposit_status: "Held"
+        deposit_status: deposit > 0 ? "Held" : "Waived"
       };
 
       const tenantRecord = {
@@ -558,7 +587,10 @@
 
         <div style="background-color:var(--slate-50); padding:0.75rem; border-radius:var(--radius-md); border:1px solid var(--slate-200); display:flex; flex-direction:column; gap:0.25rem;">
           <div class="ledger-row"><span>Net Rent:</span><b>₹${b.net_rent}</b></div>
-          <div class="ledger-row"><span>Caution Deposit:</span><b>₹${b.caution_deposit}</b></div>
+          <div class="ledger-row">
+            <span>Caution Deposit:</span>
+            <b>${Number(b.caution_deposit) > 0 ? `₹${b.caution_deposit} (Held)` : 'Waived (₹0)'}</b>
+          </div>
           <div class="ledger-row" style="color:var(--emerald);"><span>Advance Paid:</span><b>₹${b.advance_paid}</b></div>
           <div class="ledger-row total" style="color:var(--amber);"><span>Balance Remaining:</span><span>₹${balance}</span></div>
         </div>
