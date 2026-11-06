@@ -19,7 +19,7 @@
   <!-- CONFIGURATION -->
   <script>
     // PASTE YOUR DEPLOYED GOOGLE APPS SCRIPT WEB APP URL HERE:
-    const API_URL = "YOUR_APPS_SCRIPT_WEB_APP_URL";
+    const API_URL = "https://script.google.com/macros/s/AKfycbylpeucXe9la6adHK01Mgewjv46hCQOTQyROjYU8yvV2tWCAfyJ7ePiVp1zVZX1IKKx/exec";
   </script>
 
   <!-- TOP HEADER -->
@@ -259,13 +259,13 @@
       populateSpaceOptions();
       renderDashboard();
       
-      if (API_URL && API_URL !== "YOUR_APPS_SCRIPT_WEB_APP_URL") {
+      if (API_URL && API_URL !== "https://script.google.com/macros/s/AKfycbylpeucXe9la6adHK01Mgewjv46hCQOTQyROjYU8yvV2tWCAfyJ7ePiVp1zVZX1IKKx/exec") {
         refreshData();
       }
     });
 
     async function refreshData() {
-      if (!API_URL || API_URL === "YOUR_APPS_SCRIPT_WEB_APP_URL") {
+      if (!API_URL || API_URL === "https://script.google.com/macros/s/AKfycbylpeucXe9la6adHK01Mgewjv46hCQOTQyROjYU8yvV2tWCAfyJ7ePiVp1zVZX1IKKx/exec") {
         alert("Please set your deployed Google Apps Script URL in index.html to sync live data.");
         return;
       }
@@ -505,7 +505,7 @@
       closeBookingModal();
 
       // 2. Push to Google Apps Script backend if configured
-      if (API_URL && API_URL !== "YOUR_APPS_SCRIPT_WEB_APP_URL") {
+      if (API_URL && API_URL !== "https://script.google.com/macros/s/AKfycbylpeucXe9la6adHK01Mgewjv46hCQOTQyROjYU8yvV2tWCAfyJ7ePiVp1zVZX1IKKx/exec") {
         try {
           await fetch(API_URL, {
             method: "POST",
@@ -582,7 +582,7 @@
       renderDashboard();
       openTenantDrawer(bookingId);
 
-      if (API_URL && API_URL !== "YOUR_APPS_SCRIPT_WEB_APP_URL") {
+      if (API_URL && API_URL !== "https://script.google.com/macros/s/AKfycbylpeucXe9la6adHK01Mgewjv46hCQOTQyROjYU8yvV2tWCAfyJ7ePiVp1zVZX1IKKx/exec") {
         fetch(API_URL, {
           method: "POST",
           body: JSON.stringify({
@@ -599,7 +599,7 @@
       renderDashboard();
       closeTenantDrawer();
 
-      if (API_URL && API_URL !== "YOUR_APPS_SCRIPT_WEB_APP_URL") {
+      if (API_URL && API_URL !== "https://script.google.com/macros/s/AKfycbylpeucXe9la6adHK01Mgewjv46hCQOTQyROjYU8yvV2tWCAfyJ7ePiVp1zVZX1IKKx/exec") {
         fetch(API_URL, {
           method: "POST",
           body: JSON.stringify({
