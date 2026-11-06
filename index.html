@@ -192,7 +192,7 @@
           </div>
         </div>
 
-        <!-- Rates, Caution Deposit Toggle & F&F Discounts -->
+        <!-- Rates, Caution Deposit Toggle & % Discount Input -->
         <div class="form-group-card accent">
           <strong style="color:var(--primary);">3. Rates & Deposit Settings</strong>
           
@@ -207,26 +207,22 @@
               <span class="slider"></span>
             </label>
           </div>
-
+        
           <div class="grid-2">
             <div>
-              <label for="modalDiscount">Pricing Tier</label>
-              <select id="modalDiscount" onchange="calculatePricing()">
-                <option value="0">Standard (0% Off)</option>
-                <option value="0.20">Friends & Family (20% Off)</option>
-                <option value="0.35">Special F&F (35% Off)</option>
-                <option value="0.50">Close Family (50% Off)</option>
-              </select>
+              <label for="modalDiscount">Discount (%)</label>
+              <input type="number" id="modalDiscount" min="0" max="100" step="1" placeholder="e.g. 15" oninput="calculatePricing()" style="font-weight:600;">
             </div>
             <div>
-              <label for="modalAdvance">Advance Received (₹)</label>
-              <input type="number" id="modalAdvance" oninput="calculatePricing()" required>
+              <label for="modalAdvance">Advance Received (₹) <span style="color:var(--rose);">*</span></label>
+              <input type="number" id="modalAdvance" min="0" placeholder="Enter advance amount" oninput="calculatePricing()" style="font-weight:600;">
+              <span id="advanceWarning" class="hidden" style="color:var(--rose); font-size:0.65rem; font-weight:700; display:block; margin-top:2px;">⚠️ Advance amount is required.</span>
             </div>
           </div>
-
+        
           <div class="ledger-summary-box">
             <div class="ledger-row"><span>Base Rent (<span id="calcDays">1</span> day(s)):</span><b id="calcBase">₹0</b></div>
-            <div class="ledger-row" style="color:var(--rose);"><span>F&F Discount:</span><span id="calcDisc">-₹0</span></div>
+            <div class="ledger-row" style="color:var(--rose);"><span>Discount (<span id="calcDiscPercent">0</span>%):</span><span id="calcDisc">-₹0</span></div>
             <div class="ledger-row"><span>Caution Deposit:</span><b id="calcDeposit">₹0</b></div>
             <div class="ledger-row total"><span>Total Payable:</span><span id="calcTotal">₹0</span></div>
             <div class="ledger-row" style="color:var(--amber); font-weight:800;"><span>Remaining Balance:</span><span id="calcBalance">₹0</span></div>
@@ -430,29 +426,32 @@
       }
     }
 
-    // Dynamic Pricing Engine with Deposit Toggle
+    // Dynamic Pricing Engine with Manual % Discount and Non-populated Advance
     function calculatePricing() {
       const spaceId = document.getElementById("modalSpaceSelect").value;
       const space = currentDB.spaces.find(s => s.space_id === spaceId);
       if (!space) return;
-
+    
       const slotType = document.getElementById("modalSlotType").value;
       const start = new Date(document.getElementById("modalStartDate").value);
       const end = new Date(document.getElementById("modalEndDate").value);
-
+    
       let days = Math.max(1, Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1);
       if (slotType === "HalfDay") days = 0.5;
-
+    
       const baseRate = days === 0.5 ? Number(space.half_day_rate || (space.full_day_rate * 0.6)) : Number(space.full_day_rate) * days;
-      const discountPct = parseFloat(document.getElementById("modalDiscount").value) || 0;
-      const discountAmt = Math.round(baseRate * discountPct);
+      
+      // Custom Percentage Discount
+      const discountInput = document.getElementById("modalDiscount").value;
+      const discountPct = Math.min(100, Math.max(0, parseFloat(discountInput) || 0));
+      const discountAmt = Math.round(baseRate * (discountPct / 100));
       const netRent = baseRate - discountAmt;
-
-      // Handle Caution Deposit Toggle
+    
+      // Caution Deposit Toggle
       const isDepositIncluded = document.getElementById("cautionDepositToggle").checked;
       const depositLabel = document.getElementById("depositToggleLabel");
       let deposit = 0;
-
+    
       if (isDepositIncluded) {
         deposit = Number(space.default_deposit || 0);
         depositLabel.innerText = `Standard deposit: ₹${deposit}`;
@@ -462,17 +461,25 @@
         depositLabel.innerText = "Deposit waived (₹0)";
         depositLabel.style.color = "var(--emerald)";
       }
-
+    
       const totalPayable = netRent + deposit;
-
-      const advanceInput = document.getElementById("modalAdvance");
-      if (!advanceInput.value) advanceInput.value = Math.round(totalPayable * 0.3);
-      const advancePaid = parseFloat(advanceInput.value) || 0;
+    
+      // Advance calculation without auto-populating
+      const advanceField = document.getElementById("modalAdvance");
+      const advanceVal = advanceField.value.trim();
+      const advancePaid = advanceVal === "" ? 0 : parseFloat(advanceVal) || 0;
       const balance = Math.max(0, totalPayable - advancePaid);
-
+    
+      // Clear warning if user begins typing
+      if (advanceVal !== "") {
+        document.getElementById("advanceWarning").classList.add("hidden");
+        advanceField.style.borderColor = "var(--slate-300)";
+      }
+    
       document.getElementById("calcDays").innerText = days;
       document.getElementById("calcBase").innerText = `₹${baseRate}`;
-      document.getElementById("calcDisc").innerText = `-₹${discountAmt} (${discountPct * 100}%)`;
+      document.getElementById("calcDiscPercent").innerText = discountPct;
+      document.getElementById("calcDisc").innerText = `-₹${discountAmt}`;
       document.getElementById("calcDeposit").innerText = `₹${deposit}`;
       document.getElementById("calcTotal").innerText = `₹${totalPayable}`;
       document.getElementById("calcBalance").innerText = `₹${balance}`;
@@ -493,26 +500,41 @@
 
     async function submitNewBooking(event) {
       event.preventDefault();
+    
+      // Validate Advance Received field
+      const advanceInput = document.getElementById("modalAdvance");
+      const advanceVal = advanceInput.value.trim();
+      const warningEl = document.getElementById("advanceWarning");
+    
+      if (advanceVal === "" || isNaN(advanceVal) || parseFloat(advanceVal) < 0) {
+        warningEl.classList.remove("hidden");
+        advanceInput.style.borderColor = "var(--rose)";
+        advanceInput.focus();
+        alert("Please enter the Advance Received amount (enter 0 if no advance collected).");
+        return;
+      }
+    
       const idBase64 = document.getElementById("idProofBase64").value;
       if (!idBase64) {
         alert("A tenant ID Proof photo is mandatory.");
         return;
       }
-
+    
       const saveBtn = document.getElementById("saveBookingBtn");
       saveBtn.disabled = true;
       saveBtn.innerText = "Syncing with Sheets...";
-
+    
       const spaceId = document.getElementById("modalSpaceSelect").value;
       const bookingId = "BK-" + Date.now().toString().slice(-6);
-
+    
       const baseAmount = parseInt(document.getElementById("calcBase").innerText.replace("₹", ""));
-      const discountAmt = parseInt(document.getElementById("calcDisc").innerText.replace("-₹", "").split(" ")[0]);
+      const discountAmt = parseInt(document.getElementById("calcDisc").innerText.replace("-₹", ""));
+      const discountPct = parseFloat(document.getElementById("modalDiscount").value) || 0;
       const deposit = parseInt(document.getElementById("calcDeposit").innerText.replace("₹", ""));
-      const advance = parseFloat(document.getElementById("modalAdvance").value) || 0;
+      const advance = parseFloat(advanceVal);
       const netRent = baseAmount - discountAmt;
       const isDepositIncluded = document.getElementById("cautionDepositToggle").checked;
-
+    
       const bookingRecord = {
         booking_id: bookingId,
         space_id: spaceId,
@@ -520,7 +542,7 @@
         end_date: document.getElementById("modalEndDate").value,
         slot_type: document.getElementById("modalSlotType").value,
         base_amount: baseAmount,
-        discount_type: document.getElementById("modalDiscount").value,
+        discount_type: `${discountPct}%`,
         discount_amount: discountAmt,
         net_rent: netRent,
         caution_deposit: deposit,
@@ -530,7 +552,7 @@
         balance_status: (netRent + deposit - advance) <= 0 ? "Cleared" : "Pending",
         deposit_status: deposit > 0 ? "Held" : "Waived"
       };
-
+    
       const tenantRecord = {
         booking_id: bookingId,
         full_name: document.getElementById("tName").value,
@@ -539,7 +561,7 @@
         phone_number: document.getElementById("tPhone").value,
         id_proof_base64: idBase64
       };
-
+    
       try {
         await DataStore.postToSheets("create_booking", { booking: bookingRecord, tenant: tenantRecord });
         closeBookingModal();
@@ -640,6 +662,11 @@
 
     function openBookingModal() {
       document.getElementById("bookingModal").classList.remove("hidden");
+      // Ensure advance and discount start clean/empty
+      document.getElementById("modalAdvance").value = "";
+      document.getElementById("modalDiscount").value = "";
+      document.getElementById("advanceWarning").classList.add("hidden");
+      document.getElementById("modalAdvance").style.borderColor = "var(--slate-300)";
       calculatePricing();
     }
 
