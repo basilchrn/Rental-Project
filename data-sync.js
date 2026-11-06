@@ -5,7 +5,7 @@
 
 // OPTIONAL: Paste your deployed Google Apps Script URL here when ready.
 // If left empty, the application functions 100% offline via localStorage.
-const APPS_SCRIPT_URL = "";
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbylpeucXe9la6adHK01Mgewjv46hCQOTQyROjYU8yvV2tWCAfyJ7ePiVp1zVZX1IKKx/exec";
 
 const STORAGE_KEY = "RENTAL_MANAGER_DB_V1";
 
