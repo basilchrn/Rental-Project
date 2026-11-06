@@ -2,35 +2,39 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>Rental Manager | Space & Day Slot Hub</title>
+  <!-- viewport-fit=cover enables edge-to-edge support for iPhone notches and dynamic islands -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#1e1b4b">
+  <title>Rental Manager</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-  <!-- HEADER -->
+  <!-- TOP HEADER -->
   <header>
     <div class="max-w-6xl header-inner">
       <div>
-        <h1>Premises Day Rental Hub</h1>
-        <p>Connected to Google Sheets</p>
+        <h1>Premises Rental Hub</h1>
+        <p>Day & Slot Manager</p>
       </div>
       <div class="header-actions">
         <button type="button" onclick="loadFromSheets()" class="btn btn-outline" id="syncBtn">
-          🔄 Refresh Sheets
+          🔄 Refresh
         </button>
         <button type="button" onclick="openBookingModal()" class="btn btn-amber" id="newBookingBtn" disabled>
-          + New Booking
+          + Book
         </button>
       </div>
     </div>
   </header>
 
-  <!-- MAIN BODY -->
+  <!-- MAIN SCROLLABLE BODY -->
   <main class="max-w-6xl">
     
-    <!-- KPI METRICS -->
-    <div class="stats-grid">
+    <!-- STATS -->
+    <div class="stats-grid" id="statsSection">
       <div class="stat-card">
         <div class="label">Total Spaces</div>
         <div id="statTotal" class="value">0</div>
@@ -44,26 +48,26 @@
         <div id="statBooked" class="value text-rose">0</div>
       </div>
       <div class="stat-card">
-        <div class="label">Pending Balance</div>
+        <div class="label">Due Balance</div>
         <div id="statPending" class="value text-amber">₹0</div>
       </div>
     </div>
 
-    <!-- SPACES GRID SECTION -->
-    <section>
+    <!-- SPACES SECTION -->
+    <section id="spacesSection">
       <div class="section-header">
-        <h2>Premises Spaces & Slots</h2>
+        <h2>Premises Spaces</h2>
         <span id="syncNotice" class="text-amber" style="font-size:0.75rem; font-weight:700;">Loading from Google Sheets...</span>
       </div>
       <div id="spacesGrid" class="spaces-grid">
-        <!-- Injected via renderApp() -->
+        <!-- Injected via JS -->
       </div>
     </section>
 
-    <!-- ACTIVE BOOKINGS / TRANSACTIONS TABLE -->
-    <section class="table-card">
+    <!-- TRANSACTIONS / BOOKINGS -->
+    <section class="table-card" id="bookingsSection">
       <div class="section-header">
-        <h2>Active Bookings & Payments</h2>
+        <h2>Bookings & Payments</h2>
       </div>
       <div class="table-responsive">
         <table>
@@ -72,23 +76,44 @@
               <th>Space</th>
               <th>Tenant</th>
               <th>Dates</th>
-              <th>Net Rent</th>
+              <th>Rent</th>
               <th>Advance</th>
               <th>Balance</th>
               <th style="text-align: right;">Action</th>
             </tr>
           </thead>
           <tbody id="bookingsTableBody">
-            <!-- Injected via renderApp() -->
+            <!-- Injected via JS -->
           </tbody>
         </table>
       </div>
     </section>
   </main>
 
-  <!-- MODAL: NEW BOOKING & TENANT REGISTRATION -->
+  <!-- MOBILE BOTTOM BAR (Thumb-friendly touch targets) -->
+  <nav class="mobile-bottom-bar">
+    <button type="button" onclick="scrollToSection('spacesSection')" class="active">
+      <span class="icon">🏢</span>
+      Spaces
+    </button>
+    <button type="button" onclick="openBookingModal()">
+      <span class="icon">➕</span>
+      Book Slot
+    </button>
+    <button type="button" onclick="scrollToSection('bookingsSection')">
+      <span class="icon">📋</span>
+      Ledger
+    </button>
+    <button type="button" onclick="loadFromSheets()">
+      <span class="icon">🔄</span>
+      Sync
+    </button>
+  </nav>
+
+  <!-- MODAL: NEW BOOKING (Native Bottom Sheet on Mobile) -->
   <div id="bookingModal" class="modal-overlay hidden">
     <div class="modal-content">
+      <div class="sheet-handle"></div>
       <div class="modal-header">
         <div>
           <h3>New Slot Booking</h3>
@@ -154,11 +179,11 @@
             </div>
           </div>
 
-          <!-- Mandatory ID Upload -->
+          <!-- Direct Mobile Camera Trigger -->
           <div class="upload-dropzone">
-            <label style="font-weight:700; color:var(--slate-700);">Mandatory Tenant ID Photo</label>
+            <label style="font-weight:700; color:var(--slate-700);">Tenant ID Proof (Camera / File)</label>
             <p style="font-size:0.65rem; color:var(--slate-400); margin-bottom:0.4rem;">
-              Capture from camera or select Govt ID proof
+              Tap below to open your camera and capture the physical ID card
             </p>
             <div style="display:flex; justify-content:center; gap:0.5rem; flex-wrap:wrap; align-items:center;">
               <input type="file" id="idProofInput" accept="image/*" capture="environment" onchange="handleIdUpload(event)">
@@ -170,7 +195,7 @@
 
         <!-- Rates & F&F Discounts -->
         <div class="form-group-card accent">
-          <strong style="color:var(--primary);">3. Rates & Friends / Family (F&F) Discount</strong>
+          <strong style="color:var(--primary);">3. Rates & F&F Discount</strong>
           <div class="grid-2">
             <div>
               <label for="modalDiscount">Pricing Tier</label>
@@ -203,15 +228,16 @@
     </div>
   </div>
 
-  <!-- DRAWER: TENANT INSPECTOR & SETTLEMENT -->
+  <!-- DRAWER: TENANT INSPECTOR (Native Bottom Sheet on Mobile) -->
   <div id="tenantDrawer" class="drawer-overlay hidden">
     <div class="drawer-panel">
+      <div class="sheet-handle"></div>
       <div class="drawer-header">
         <h3 style="font-weight:700;">Tenant Info Sheet</h3>
         <button type="button" class="btn btn-outline" style="color:var(--slate-800); border-color:var(--slate-300);" onclick="closeTenantDrawer()">&times;</button>
       </div>
       <div id="drawerContent" class="drawer-body">
-        <!-- Rendered via openTenantDrawer() -->
+        <!-- Rendered via JS -->
       </div>
     </div>
   </div>
@@ -225,16 +251,21 @@
       const today = new Date().toISOString().split("T")[0];
       document.getElementById("modalStartDate").value = today;
       document.getElementById("modalEndDate").value = today;
-      
-      // Load directly from Google Sheets
       loadFromSheets();
     });
+
+    function scrollToSection(id) {
+      const element = document.getElementById(id);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
 
     async function loadFromSheets() {
       const notice = document.getElementById("syncNotice");
       const syncBtn = document.getElementById("syncBtn");
       notice.classList.remove("hidden");
-      notice.innerText = "Syncing with Google Sheets...";
+      notice.innerText = "Syncing with Sheets...";
       syncBtn.disabled = true;
 
       const res = await DataStore.fetchFromSheets();
@@ -248,10 +279,9 @@
         renderApp();
       } else {
         notice.classList.remove("hidden");
-        notice.innerText = "Error: " + res.message;
-        // Check if there is any local cached data from a previous sync
+        notice.innerText = res.message;
         currentDB = DataStore.get();
-        if (currentDB.spaces.length > 0) {
+        if (currentDB.spaces && currentDB.spaces.length > 0) {
           populateSpaceSelect();
           renderApp();
         } else {
@@ -267,12 +297,12 @@
       document.getElementById("statPending").innerText = "₹0";
 
       document.getElementById("spacesGrid").innerHTML = `
-        <div style="grid-column: 1 / -1; background:#ffffff; border:1px dashed var(--slate-300); border-radius:var(--radius-xl); padding:2rem; text-align:center;">
-          <h3 style="font-size:1rem; font-weight:700; color:var(--slate-800); margin-bottom:0.5rem;">No Spaces Found in Google Sheet</h3>
-          <p style="font-size:0.75rem; color:var(--slate-500); max-width:24rem; margin:0 auto 1rem auto;">
-            ${message || "Ensure your 'Spaces' tab has entries and your Apps Script Web App URL is correctly entered in data-sync.js."}
+        <div style="background:#ffffff; border:1px dashed var(--slate-300); border-radius:var(--radius-xl); padding:1.5rem; text-align:center;">
+          <h3 style="font-size:0.95rem; font-weight:700; margin-bottom:0.4rem;">No Spaces Found</h3>
+          <p style="font-size:0.75rem; color:var(--slate-500); margin-bottom:0.75rem;">
+            ${message || "Ensure your 'Spaces' tab has rows and APPS_SCRIPT_URL is configured."}
           </p>
-          <button type="button" onclick="loadFromSheets()" class="btn btn-primary">Retry Fetch</button>
+          <button type="button" onclick="loadFromSheets()" class="btn btn-primary">Retry</button>
         </div>
       `;
 
@@ -299,7 +329,6 @@
         return;
       }
 
-      // Calculate KPI metrics
       const total = currentDB.spaces.length;
       const booked = currentDB.spaces.filter(s => String(s.status).toLowerCase() === "booked").length;
       const available = total - booked;
@@ -316,7 +345,7 @@
       document.getElementById("statAvailable").innerText = available;
       document.getElementById("statPending").innerText = `₹${pendingBalance.toLocaleString()}`;
 
-      // Render Spaces Grid
+      // Spaces Grid
       const grid = document.getElementById("spacesGrid");
       grid.innerHTML = currentDB.spaces.map(s => {
         const isBooked = String(s.status).toLowerCase() === "booked";
@@ -348,7 +377,7 @@
             <div class="space-card-footer">
               ${isBooked && currentBooking ? `
                 <button type="button" class="btn btn-secondary" onclick="openTenantDrawer('${currentBooking.booking_id}')">
-                  Inspect Tenant & Settle
+                  Inspect & Settle
                 </button>
               ` : `
                 <button type="button" class="btn btn-primary" onclick="quickBookSpace('${s.space_id}')">
@@ -360,7 +389,7 @@
         `;
       }).join("");
 
-      // Render Bookings Table
+      // Bookings Table
       const tBody = document.getElementById("bookingsTableBody");
       if (currentDB.bookings.length === 0) {
         tBody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:1.5rem; color:var(--slate-400);">No reservations recorded yet in sheet.</td></tr>`;
@@ -379,7 +408,7 @@
               <td style="color:var(--emerald); font-weight:700;">₹${b.advance_paid}</td>
               <td style="color:${balance > 0 ? 'var(--amber)' : 'var(--slate-400)'}; font-weight:800;">₹${balance}</td>
               <td style="text-align:right;">
-                <button type="button" class="btn btn-outline" style="color:var(--primary-accent); border:none; padding:0;" onclick="openTenantDrawer('${b.booking_id}')">
+                <button type="button" class="btn btn-outline" style="color:var(--primary-accent); border:none; padding:0; min-height:unset;" onclick="openTenantDrawer('${b.booking_id}')">
                   View
                 </button>
               </td>
@@ -421,6 +450,7 @@
       document.getElementById("calcBalance").innerText = `₹${balance}`;
     }
 
+    // Direct Image / Camera Handler
     function handleIdUpload(event) {
       const file = event.target.files[0];
       if (!file) return;
@@ -444,7 +474,7 @@
 
       const saveBtn = document.getElementById("saveBookingBtn");
       saveBtn.disabled = true;
-      saveBtn.innerText = "Syncing with Google Sheets...";
+      saveBtn.innerText = "Syncing with Sheets...";
 
       const spaceId = document.getElementById("modalSpaceSelect").value;
       const bookingId = "BK-" + Date.now().toString().slice(-6);
@@ -487,7 +517,6 @@
         document.getElementById("bookingForm").reset();
         document.getElementById("idProofBase64").value = "";
         document.getElementById("idImageTag").classList.add("hidden");
-        // Re-fetch authoritative sheet records
         await loadFromSheets();
       } catch (err) {
         alert("Error saving booking: " + err.message);
